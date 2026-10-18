@@ -1,7 +1,7 @@
 const ALLOWED_CITIES = new Set(['Podgorica', 'Bar', 'Nikšić', 'Budva', 'Kotor']);
 const MAX_ADS = 5;
 const MAX_AGE_DAYS = 3;
-const DELETE_OLDEST = 8;
+const DELETE_OLDEST = 3;
 const WATERMARK_RE = /(watermark|water-mark|logo|facebook|instagram|olx|patuljak|oglasi|kupujem|prodajem)/i;
 const FALLBACK_IMAGE = process.env.NEUTRAL_IMAGE_URL || '/assets/neutral-product.svg';
 
