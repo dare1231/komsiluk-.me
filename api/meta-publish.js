@@ -1,12 +1,18 @@
 const sharp = require('sharp');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const CAPTION = 'Najnovije na aplikaciji · link u bio';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FV47phgUExS5wI';
 const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL || '';
-const PAGE_ID = process.env.FB_PAGE_ID || PAGE_ID;
+const PAGE_ID = process.env.FB_PAGE_ID || process.env.META_PAGE_ID || '';
 const PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || process.env.IG_TOKEN;
 const IG_USER_ID = process.env.IG_USER_ID || process.env.META_IG_USER_ID || process.env.IG_ID;
 const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN;
 let resolvedPageToken = null;
+async function isSupabaseUserToken(token) {
+  if (!token || !process.env.SUPABASE_URL) return false;
+  const response = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+  return response.ok;
+}
 async function getPageToken() {
   if (resolvedPageToken) return resolvedPageToken;
   const raw = encodeURIComponent(PAGE_ACCESS_TOKEN);
@@ -52,7 +58,12 @@ async function upload(buffer, slot) {
 function slotKey() { const d = new Date(); return `${d.toISOString().slice(0, 10)}-${String(d.getUTCHours()).padStart(2, '0')}`; }
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
-  if (req.headers.authorization !== `Bearer ${PUBLISH_TOKEN}` && req.headers['x-vercel-cron'] !== '1') return res.status(401).json({ error: 'Neautorizovan publish.' });
+  const authorization = req.headers.authorization || '';
+  const bearer = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  const bySecret = Boolean(PUBLISH_TOKEN && authorization === `Bearer ${PUBLISH_TOKEN}`);
+  const byCron = req.headers['x-vercel-cron'] === '1';
+  const byLoggedInAdmin = !bySecret && !byCron && await isSupabaseUserToken(bearer);
+  if (!bySecret && !byCron && !byLoggedInAdmin) return res.status(401).json({ error: 'Neautorizovan publish.' });
   if (!PAGE_ID || !PAGE_ACCESS_TOKEN || !IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
   try {
     const slot = slotKey();

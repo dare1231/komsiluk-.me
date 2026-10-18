@@ -39,3 +39,7 @@ Potrebne Vercel varijable: `DAILY_IMPORT_TOKEN`, `DAILY_ADS_SOURCE_URL`, opciona
 Nakon dnevnog uvoza pravi se jedna objava od 4 proizvoda: 1 Temu proizvod i 3 najnovija oglasa iz aplikacije. Kolaž prikazuje fotografiju, naziv i lokaciju. Opis objave je `Najnovije na aplikaciji · link u bio`. Objava se poziva odmah nakon uspješnog dnevnog uvoza; termin u 05:15 UTC ostaje rezervni pokušaj ako Meta privremeno ne odgovori. Pokrenuti `temu-products.sql` i podesiti Meta varijable iz dokumentacije.
 
 Za automatsku objavu podesiti `AUTO_SOCIAL_PUBLISH=true`, `PUBLIC_SITE_URL` i `META_PUBLISH_TOKEN`.
+
+## Dnevni Temu panel
+
+Admin panel sada ima tri polja za dnevne Temu linkove. Nakon prijave, klik na **Sačuvaj paket** preuzima osnovni naziv i sliku proizvoda i čuva tri aktivna proizvoda u `temu_products`; klik na **Pregled objave** provjerava tri najnovija odobrena lokalna oglasa i prvi Temu proizvod. Ručna Meta objava koristi prijavljenu Supabase sesiju, dok automatski cron i dalje koriste `META_PUBLISH_TOKEN`.

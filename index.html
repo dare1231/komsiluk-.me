@@ -374,6 +374,25 @@
                     </div>
                 </div>
 
+                <!-- DNEVNI TEMU PAKET + META OBJAVA -->
+                <div class="bg-gradient-to-br from-orange-50 to-rose-50 border border-orange-200 p-4 rounded-3xl space-y-3 shadow-sm">
+                    <div class="flex justify-between items-center border-b border-orange-200/70 pb-2">
+                        <h4 class="text-xs font-extrabold text-orange-900"><i class="fa-solid fa-bag-shopping text-orange-500 mr-1.5"></i> 3 Temu linka za danas</h4>
+                        <span class="text-[9px] bg-orange-200 text-orange-900 px-2 py-0.5 rounded font-bold">DNEVNI PAKET</span>
+                    </div>
+                    <p class="text-[10px] text-orange-800">Unesi tri proizvoda. Aplikacija će pokušati preuzeti naziv, sliku i cijenu, pa ih spojiti sa 3 najnovija lokalna oglasa.</p>
+                    <div class="space-y-2">
+                        <input id="temu-link-1" type="url" placeholder="1. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
+                        <input id="temu-link-2" type="url" placeholder="2. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
+                        <input id="temu-link-3" type="url" placeholder="3. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
+                    </div>
+                    <div id="temu-paket-status" class="text-[10px] text-slate-500">Paket još nije učitan.</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="sacuvajTemuPaket()" class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-floppy-disk mr-1"></i> Sačuvaj paket</button>
+                        <button onclick="pripremiMetaObjavu()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-share-nodes mr-1"></i> Pregled objave</button>
+                    </div>
+                </div>
+
                 <!-- UPRAVLJANJE OGLASIMA -->
                 <div class="bg-white border border-slate-100 p-4 rounded-3xl space-y-3 shadow-sm">
                     <div class="flex justify-between items-center border-b border-slate-100 pb-2">
@@ -1332,6 +1351,7 @@
             document.getElementById('tab-' + tab).classList.remove('hidden');
             if (tab === 'panel') {
                 ucitajAdminPanelOglase();
+                ucitajTemuPaket();
                 ucitajSveRazgovore();
                 pokreniBrojacPoruka();
                 ucitajAnalitiku();
@@ -1369,6 +1389,60 @@
             panelOtklucan = false;
             promeniTab('home');
             toast('Odjavljeni ste.', 'info');
+        }
+
+        async function authHeaders() {
+            const { data } = await supabaseClient.auth.getSession();
+            return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' } : null;
+        }
+
+        async function ucitajTemuPaket() {
+            const status = document.getElementById('temu-paket-status');
+            if (!status) return;
+            const headers = await authHeaders();
+            if (!headers) { status.innerText = 'Prijava je potrebna za Temu paket.'; return; }
+            try {
+                const response = await fetch('/api/temu-products', { headers });
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Greška pri učitavanju.');
+                (body.products || []).slice(0, 3).forEach((p, i) => {
+                    const input = document.getElementById(`temu-link-${i + 1}`);
+                    if (input) input.value = p.affiliate_url || '';
+                });
+                status.innerText = body.products?.length ? `${body.products.length} Temu proizvoda je učitano.` : 'Paket još nije učitan.';
+            } catch (error) { status.innerText = error.message; }
+        }
+
+        async function sacuvajTemuPaket() {
+            const links = [1, 2, 3].map(i => document.getElementById(`temu-link-${i}`).value.trim());
+            if (links.some(link => !link)) { toast('Unesi sva tri Temu linka.', 'err'); return; }
+            const headers = await authHeaders();
+            if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
+            const status = document.getElementById('temu-paket-status');
+            status.innerText = 'Učitavam podatke sa Temua...';
+            try {
+                const response = await fetch('/api/temu-products', { method: 'POST', headers, body: JSON.stringify({ links }) });
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Paket nije sačuvan.');
+                status.innerText = 'Paket je sačuvan i spreman za objavu.';
+                toast('Tri Temu proizvoda su sačuvana.', 'ok');
+            } catch (error) { status.innerText = error.message; toast(error.message, 'err'); }
+        }
+
+        async function pripremiMetaObjavu() {
+            const headers = await authHeaders();
+            if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
+            const [adsResponse, temuResponse] = await Promise.all([
+                supabaseClient.from('oglasi').select('id,naziv,grad,kvart,cena,img,created_at').eq('odobreno', true).order('created_at', { ascending: false }).limit(3),
+                fetch('/api/temu-products', { headers }).then(r => r.json())
+            ]);
+            const ads = adsResponse.data || [];
+            const temu = temuResponse.products?.[0];
+            if (ads.length < 3) { toast('Nema tri odobrena lokalna oglasa.', 'err'); return; }
+            if (!temu) { toast('Sačuvaj tri Temu linka prije pregleda.', 'err'); return; }
+            const opis = `${ads.map(o => `${o.naziv} (${o.grad})`).join(' · ')} · ${temu.naziv} (Temu)`;
+            toast('Spremno za objavu: ' + opis, 'ok');
+            console.info('[Komsiluk Meta preview]', { localAds: ads, temu });
         }
 
         async function proveriPostojecuSesiju() {
