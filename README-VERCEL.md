@@ -36,4 +36,6 @@ Potrebne Vercel varijable: `DAILY_IMPORT_TOKEN`, `DAILY_ADS_SOURCE_URL`, opciona
 
 ## Objave na Facebooku i Instagramu
 
-Nakon dnevnog uvoza pravi se jedna objava od 4 proizvoda: 1 Temu proizvod i 3 najnovija oglasa iz aplikacije. Kolaž prikazuje fotografiju, naziv i lokaciju. Opis objave je `Najnovije na aplikaciji · link u bio`. Pokretanje je u 05:15 UTC, a može se pozvati i odmah nakon uvoza. Pokrenuti `temu-products.sql` i podesiti Meta varijable iz dokumentacije.
+Nakon dnevnog uvoza pravi se jedna objava od 4 proizvoda: 1 Temu proizvod i 3 najnovija oglasa iz aplikacije. Kolaž prikazuje fotografiju, naziv i lokaciju. Opis objave je `Najnovije na aplikaciji · link u bio`. Objava se poziva odmah nakon uspješnog dnevnog uvoza; termin u 05:15 UTC ostaje rezervni pokušaj ako Meta privremeno ne odgovori. Pokrenuti `temu-products.sql` i podesiti Meta varijable iz dokumentacije.
+
+Za automatsku objavu podesiti `AUTO_SOCIAL_PUBLISH=true`, `PUBLIC_SITE_URL` i `META_PUBLISH_TOKEN`.

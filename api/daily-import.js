@@ -53,6 +53,13 @@ module.exports = async (req, res) => {
     if (oldest.length >= DELETE_OLDEST) await supabase(`oglasi?id=in.(${oldest.slice(0, DELETE_OLDEST).map(row => row.id).join(',')})`, { method: 'DELETE' });
     await supabase('oglasi', { method: 'POST', body: JSON.stringify(normalizedAds) });
     await supabase('daily_import_runs', { method: 'POST', body: JSON.stringify({ run_date: runDate, added_count: normalizedAds.length, deleted_count: Math.min(oldest.length, DELETE_OLDEST), cities: [...new Set(normalizedAds.map(ad => ad.grad))] }) });
-    return res.status(200).json({ ok: true, added: normalizedAds.length, deleted: Math.min(oldest.length, DELETE_OLDEST), cities: [...new Set(normalizedAds.map(ad => ad.grad))] });
+    let social = null;
+    if (process.env.AUTO_SOCIAL_PUBLISH !== 'false' && process.env.PUBLIC_SITE_URL && process.env.META_PUBLISH_TOKEN) {
+      try {
+        const publishResponse = await fetch(`${process.env.PUBLIC_SITE_URL}/api/meta-publish`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.META_PUBLISH_TOKEN}` } });
+        social = await publishResponse.json();
+      } catch (publishError) { social = { ok: false, error: publishError.message }; }
+    }
+    return res.status(200).json({ ok: true, added: normalizedAds.length, deleted: Math.min(oldest.length, DELETE_OLDEST), cities: [...new Set(normalizedAds.map(ad => ad.grad))], social });
   } catch (error) { console.error(error); return res.status(500).json({ error: error.message }); }
 };
