@@ -33,3 +33,7 @@ Ako postojeće Supabase RLS politike blokiraju upis u `oglasi`, `profiles` ili `
 Prije unosa endpoint briše 8 najstarijih oglasa iz baze, a zatim dodaje 10 novih. Ako fotografija ima logotip ili vodeni žig druge oglasne aplikacije, URL se ne preuzima; koristi se lokalna neutralna fotografija.
 
 Potrebne Vercel varijable: `DAILY_IMPORT_TOKEN`, `DAILY_ADS_SOURCE_URL`, opcionalno `DAILY_ADS_SOURCE_TOKEN`, `NEUTRAL_IMAGE_URL`, postojeće `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY`. Jednom pokrenuti `daily-import.sql` u Supabase SQL Editor-u.
+
+## Objave na Facebooku i Instagramu
+
+Nakon dnevnog uvoza pravi se jedna objava od 4 proizvoda: 1 Temu proizvod i 3 najnovija oglasa iz aplikacije. Kolaž prikazuje fotografiju, naziv i lokaciju. Opis objave je `Najnovije na aplikaciji · link u bio`. Pokretanje je u 05:15 UTC, a može se pozvati i odmah nakon uvoza. Pokrenuti `temu-products.sql` i podesiti Meta varijable iz dokumentacije.
