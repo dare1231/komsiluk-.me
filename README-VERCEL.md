@@ -28,9 +28,9 @@ Ako postojeće Supabase RLS politike blokiraju upis u `oglasi`, `profiles` ili `
 
 ## Dnevni uvoz oglasa
 
-`/api/daily-import` se pokreće svakog dana u 05:00 UTC. Izvor mora vratiti JSON oblika `{ "ads": [...] }` sa tačno 10 oglasa iz Podgorice, Bara, Nikšića, Budve i Kotora. Svaki oglas mora imati naziv, cijenu, telefon, grad i `created_at` stariji najviše 3 dana.
+`/api/daily-import` se pokreće svakog dana u 05:00 UTC. Izvor mora vratiti JSON oblika `{ "ads": [...] }` sa tačno 5 oglasa iz Podgorice, Bara, Nikšića, Budve i Kotora. Svaki oglas mora imati naziv, cijenu, telefon, grad i `created_at` stariji najviše 3 dana.
 
-Prije unosa endpoint briše 8 najstarijih oglasa iz baze, a zatim dodaje 10 novih. Ako fotografija ima logotip ili vodeni žig druge oglasne aplikacije, URL se ne preuzima; koristi se lokalna neutralna fotografija.
+Prije unosa endpoint briše 8 najstarijih oglasa iz baze, a zatim dodaje 5 novih. Ako fotografija ima logotip ili vodeni žig druge oglasne aplikacije, URL se ne preuzima; koristi se lokalna neutralna fotografija.
 
 Potrebne Vercel varijable: `DAILY_IMPORT_TOKEN`, `DAILY_ADS_SOURCE_URL`, opcionalno `DAILY_ADS_SOURCE_TOKEN`, `NEUTRAL_IMAGE_URL`, postojeće `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY`. Jednom pokrenuti `daily-import.sql` u Supabase SQL Editor-u.
 

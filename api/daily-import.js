@@ -1,5 +1,5 @@
 const ALLOWED_CITIES = new Set(['Podgorica', 'Bar', 'Nikšić', 'Budva', 'Kotor']);
-const MAX_ADS = 10;
+const MAX_ADS = 5;
 const MAX_AGE_DAYS = 3;
 const DELETE_OLDEST = 8;
 const WATERMARK_RE = /(watermark|water-mark|logo|facebook|instagram|olx|patuljak|oglasi|kupujem|prodajem)/i;
@@ -46,7 +46,7 @@ module.exports = async (req, res) => {
     const existingRun = await supabase(`daily_import_runs?select=id,added_count,deleted_count&run_date=eq.${runDate}&limit=1`);
     if (existingRun.length) return res.status(200).json({ ok: true, skipped: true, message: 'Dnevni uvoz je već izvršen.', run: existingRun[0] });
     const ads = req.method === 'GET' ? await getAdsFromSource() : (Array.isArray(req.body) ? req.body : req.body?.ads);
-    if (!Array.isArray(ads) || ads.length !== MAX_ADS) return res.status(400).json({ error: 'Dnevni paket mora sadržati tačno 10 oglasa.' });
+    if (!Array.isArray(ads) || ads.length !== MAX_ADS) return res.status(400).json({ error: 'Dnevni paket mora sadržati tačno 5 oglasa.' });
     const normalizedAds = ads.map(normalized);
     if (normalizedAds.some((ad, i) => !validAd({ ...ads[i], ...ad }))) return res.status(400).json({ error: 'Svi oglasi moraju biti mlađi od 3 dana, iz jednog od pet gradova i imati naziv, cijenu, telefon i fotografiju bez tuđeg loga/vodenog žiga.' });
     const oldest = await supabase('oglasi?select=id&order=created_at.asc&limit=8');
