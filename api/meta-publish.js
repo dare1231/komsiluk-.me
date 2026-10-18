@@ -8,9 +8,14 @@ const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || process.env.IG_TOKEN;
 let resolvedPageToken = null;
 async function getPageToken() {
   if (resolvedPageToken) return resolvedPageToken;
-  const r = await fetch(`${GRAPH}/${process.env.META_PAGE_ID}?fields=access_token&access_token=${encodeURIComponent(PAGE_ACCESS_TOKEN)}`);
-  const data = await r.json();
-  resolvedPageToken = data.access_token || PAGE_ACCESS_TOKEN;
+  const raw = encodeURIComponent(PAGE_ACCESS_TOKEN);
+  const direct = await fetch(`${GRAPH}/${process.env.META_PAGE_ID}?fields=access_token&access_token=${raw}`);
+  const directData = await direct.json();
+  if (directData.access_token) return (resolvedPageToken = directData.access_token);
+  const accounts = await fetch(`${GRAPH}/me/accounts?fields=id,access_token&access_token=${raw}`);
+  const accountData = await accounts.json();
+  const page = (accountData.data || []).find(item => String(item.id) === String(process.env.META_PAGE_ID));
+  resolvedPageToken = page?.access_token || PAGE_ACCESS_TOKEN;
   return resolvedPageToken;
 }
 const publicImage = img => img && img.startsWith('http') ? img : `${PUBLIC_SITE_URL}${img || '/assets/neutral-product.svg'}`;
