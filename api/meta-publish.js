@@ -42,18 +42,31 @@ module.exports = async (req, res) => {
   if (!process.env.META_PAGE_ID || !PAGE_ACCESS_TOKEN || !IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
   try {
     const slot = slotKey();
-    const prior = await supabase(`social_publish_runs?select=id&slot_key=eq.${encodeURIComponent(slot)}&limit=1`);
+    let hasPublishLog = true;
+    let prior = [];
+    try { prior = await supabase(`social_publish_runs?select=id&slot_key=eq.${encodeURIComponent(slot)}&limit=1`); }
+    catch (e) { if (String(e.message).includes('social_publish_runs')) hasPublishLog = false; else throw e; }
     if (prior.length) return res.status(200).json({ ok: true, skipped: true, message: 'Objava za ovaj paket je već poslata.' });
     const ads = await supabase('oglasi?select=*&odobreno=eq.true&order=created_at.desc&limit=5');
     if (ads.length < 3) return res.status(200).json({ ok: true, skipped: true, message: 'Nema 3 lokalna oglasa za kolaž.' });
-    const temuRows = await supabase('temu_products?select=*&active=eq.true&order=last_published_at.asc.nullsfirst,created_at.asc&limit=1');
-    if (!temuRows.length) return res.status(200).json({ ok: true, skipped: true, message: 'Nema Temu proizvoda.' });
+    let temuRows = [];
+    try { temuRows = await supabase('temu_products?select=*&active=eq.true&order=last_published_at.asc.nullsfirst,created_at.asc&limit=1'); }
+    catch (e) { if (!String(e.message).includes('temu_products')) throw e; }
+    if (!temuRows.length) {
+      const fallback = [
+        { naziv: 'Električna kutija za ručak za automobil', cijena: '21,28 €', image_url: 'https://img.kwcdn.com/product/open/dc454ffbfdc844f1ba1eeab73f9f361e-goods.jpeg', affiliate_url: 'https://www.temu.com/me-en/car-specific-electric-lunch-box-compatible-with--12v-car-power-outlets-uses--temperature-heating-technology-can-quickly-heat-food-and-keep-meals-warm-non-food-contact-g-606289727985146.html?top_gallery_url=https%3A%2F%2Fimg.kwcdn.com%2Fproduct%2Fopen%2Fdc454ffbfdc844f1ba1eeab73f9f361e-goods.jpeg' },
+        { naziv: 'Radio za vanredne situacije', cijena: '42,17 €', image_url: 'https://img.kwcdn.com/product/fancy/5ac9a871-a7de-4d15-9604-9c5e28626d4d.jpg', affiliate_url: 'https://www.temu.com/me-en/10000mah-37000-mwh-emergency-weather-radio-solar-hand-crank-portable-radio-with-am-fm--battery-operated-3-mode-flashlight-reading-lamp-sos-alarm-phone-charger-for-indoor-outdoor-emergency-g-601104593278176.html?top_gallery_url=https%3A%2F%2Fimg.kwcdn.com%2Fproduct%2Ffancy%2F5ac9a871-a7de-4d15-9604-9c5e28626d4d.jpg' }
+      ];
+      temuRows = [fallback[new Date().getUTCDate() % fallback.length]];
+    }
     const local = ads.slice(0, 3); const temu = temuRows[0]; const collage = await makeCollage(local, temu, slot); const imageUrl = await upload(collage, slot);
     const fb = await graph(`/${process.env.META_PAGE_ID}/photos`, { url: imageUrl, caption: CAPTION, published: 'true' });
     const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
     const ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
-    for (const o of local) await supabase('social_publish_runs', { method: 'POST', body: JSON.stringify({ slot_key: slot, oglas_id: o.id, temu_product_id: temu.id, facebook_post_id: fb.id || null, instagram_media_id: ig.id || null, caption: CAPTION }) });
-    await supabase(`temu_products?id=eq.${temu.id}`, { method: 'PATCH', body: JSON.stringify({ last_published_at: new Date().toISOString() }) });
-    return res.status(200).json({ ok: true, published: true, slot, local_ads: local.map(o => o.id), temu_product: temu.id, facebook: fb.id, instagram: ig.id });
+    if (hasPublishLog && temu.id) {
+      for (const o of local) await supabase('social_publish_runs', { method: 'POST', body: JSON.stringify({ slot_key: slot, oglas_id: o.id, temu_product_id: temu.id, facebook_post_id: fb.id || null, instagram_media_id: ig.id || null, caption: CAPTION }) });
+      await supabase(`temu_products?id=eq.${temu.id}`, { method: 'PATCH', body: JSON.stringify({ last_published_at: new Date().toISOString() }) });
+    }
+    return res.status(200).json({ ok: true, published: true, slot, local_ads: local.map(o => o.id), temu_product: temu.naziv, facebook: fb.id, instagram: ig.id, log_saved: hasPublishLog });
   } catch (error) { console.error(error); return res.status(500).json({ error: error.message }); }
 };
