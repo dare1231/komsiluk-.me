@@ -1,3 +1,9 @@
 {
-  "cleanUrls": true
+  "cleanUrls": true,
+  "crons": [
+    {
+      "path": "/api/daily-import",
+      "schedule": "0 5 * * *"
+    }
+  ]
 }
