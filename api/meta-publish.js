@@ -5,6 +5,14 @@ const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL || '';
 const PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN || process.env.IG_TOKEN;
 const IG_USER_ID = process.env.META_IG_USER_ID || process.env.IG_ID;
 const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || process.env.IG_TOKEN;
+let resolvedPageToken = null;
+async function getPageToken() {
+  if (resolvedPageToken) return resolvedPageToken;
+  const r = await fetch(`${GRAPH}/${process.env.META_PAGE_ID}?fields=access_token&access_token=${encodeURIComponent(PAGE_ACCESS_TOKEN)}`);
+  const data = await r.json();
+  resolvedPageToken = data.access_token || PAGE_ACCESS_TOKEN;
+  return resolvedPageToken;
+}
 const publicImage = img => img && img.startsWith('http') ? img : `${PUBLIC_SITE_URL}${img || '/assets/neutral-product.svg'}`;
 async function supabase(path, options = {}) {
   const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${path}`, { ...options, headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(options.headers || {}) } });
@@ -12,7 +20,7 @@ async function supabase(path, options = {}) {
   if (!r.ok) throw new Error(data?.message || text || `Supabase ${r.status}`); return data;
 }
 async function graph(path, body) {
-  const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: PAGE_ACCESS_TOKEN }) });
+  const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: await getPageToken() }) });
   const data = await r.json(); if (!r.ok || data.error) throw new Error(data.error?.message || `Meta Graph API ${r.status}`); return data;
 }
 const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
