@@ -2,6 +2,9 @@ const sharp = require('sharp');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const CAPTION = 'Najnovije na aplikaciji · link u bio';
 const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL || '';
+const PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN || process.env.IG_TOKEN;
+const IG_USER_ID = process.env.META_IG_USER_ID || process.env.IG_ID;
+const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || process.env.IG_TOKEN;
 const publicImage = img => img && img.startsWith('http') ? img : `${PUBLIC_SITE_URL}${img || '/assets/neutral-product.svg'}`;
 async function supabase(path, options = {}) {
   const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${path}`, { ...options, headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(options.headers || {}) } });
@@ -9,7 +12,7 @@ async function supabase(path, options = {}) {
   if (!r.ok) throw new Error(data?.message || text || `Supabase ${r.status}`); return data;
 }
 async function graph(path, body) {
-  const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: process.env.META_PAGE_ACCESS_TOKEN }) });
+  const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: PAGE_ACCESS_TOKEN }) });
   const data = await r.json(); if (!r.ok || data.error) throw new Error(data.error?.message || `Meta Graph API ${r.status}`); return data;
 }
 const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -35,8 +38,8 @@ async function upload(buffer, slot) {
 function slotKey() { const d = new Date(); return `${d.toISOString().slice(0, 10)}-${String(d.getUTCHours()).padStart(2, '0')}`; }
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
-  if (req.headers.authorization !== `Bearer ${process.env.META_PUBLISH_TOKEN}` && req.headers['x-vercel-cron'] !== '1') return res.status(401).json({ error: 'Neautorizovan publish.' });
-  if (!process.env.META_PAGE_ID || !process.env.META_PAGE_ACCESS_TOKEN || !process.env.META_IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
+  if (req.headers.authorization !== `Bearer ${PUBLISH_TOKEN}` && req.headers['x-vercel-cron'] !== '1') return res.status(401).json({ error: 'Neautorizovan publish.' });
+  if (!process.env.META_PAGE_ID || !PAGE_ACCESS_TOKEN || !IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
   try {
     const slot = slotKey();
     const prior = await supabase(`social_publish_runs?select=id&slot_key=eq.${encodeURIComponent(slot)}&limit=1`);
@@ -47,8 +50,8 @@ module.exports = async (req, res) => {
     if (!temuRows.length) return res.status(200).json({ ok: true, skipped: true, message: 'Nema Temu proizvoda.' });
     const local = ads.slice(0, 3); const temu = temuRows[0]; const collage = await makeCollage(local, temu, slot); const imageUrl = await upload(collage, slot);
     const fb = await graph(`/${process.env.META_PAGE_ID}/photos`, { url: imageUrl, caption: CAPTION, published: 'true' });
-    const media = await graph(`/${process.env.META_IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
-    const ig = await graph(`/${process.env.META_IG_USER_ID}/media_publish`, { creation_id: media.id });
+    const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
+    const ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
     for (const o of local) await supabase('social_publish_runs', { method: 'POST', body: JSON.stringify({ slot_key: slot, oglas_id: o.id, temu_product_id: temu.id, facebook_post_id: fb.id || null, instagram_media_id: ig.id || null, caption: CAPTION }) });
     await supabase(`temu_products?id=eq.${temu.id}`, { method: 'PATCH', body: JSON.stringify({ last_published_at: new Date().toISOString() }) });
     return res.status(200).json({ ok: true, published: true, slot, local_ads: local.map(o => o.id), temu_product: temu.id, facebook: fb.id, instagram: ig.id });

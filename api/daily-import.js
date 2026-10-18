@@ -54,9 +54,9 @@ module.exports = async (req, res) => {
     await supabase('oglasi', { method: 'POST', body: JSON.stringify(normalizedAds) });
     await supabase('daily_import_runs', { method: 'POST', body: JSON.stringify({ run_date: runDate, added_count: normalizedAds.length, deleted_count: Math.min(oldest.length, DELETE_OLDEST), cities: [...new Set(normalizedAds.map(ad => ad.grad))] }) });
     let social = null;
-    if (process.env.AUTO_SOCIAL_PUBLISH !== 'false' && process.env.PUBLIC_SITE_URL && process.env.META_PUBLISH_TOKEN) {
+    if (process.env.AUTO_SOCIAL_PUBLISH !== 'false' && process.env.PUBLIC_SITE_URL && (process.env.META_PUBLISH_TOKEN || process.env.IG_TOKEN)) {
       try {
-        const publishResponse = await fetch(`${process.env.PUBLIC_SITE_URL}/api/meta-publish`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.META_PUBLISH_TOKEN}` } });
+        const publishResponse = await fetch(`${process.env.PUBLIC_SITE_URL}/api/meta-publish`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.META_PUBLISH_TOKEN || process.env.IG_TOKEN}` } });
         social = await publishResponse.json();
       } catch (publishError) { social = { ok: false, error: publishError.message }; }
     }
