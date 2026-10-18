@@ -2,19 +2,20 @@ const sharp = require('sharp');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const CAPTION = 'Najnovije na aplikaciji · link u bio';
 const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL || '';
-const PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN || process.env.IG_TOKEN;
-const IG_USER_ID = process.env.META_IG_USER_ID || process.env.IG_ID;
-const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || process.env.IG_TOKEN;
+const PAGE_ID = process.env.FB_PAGE_ID || PAGE_ID;
+const PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || process.env.IG_TOKEN;
+const IG_USER_ID = process.env.IG_USER_ID || process.env.META_IG_USER_ID || process.env.IG_ID;
+const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN;
 let resolvedPageToken = null;
 async function getPageToken() {
   if (resolvedPageToken) return resolvedPageToken;
   const raw = encodeURIComponent(PAGE_ACCESS_TOKEN);
-  const direct = await fetch(`${GRAPH}/${process.env.META_PAGE_ID}?fields=access_token&access_token=${raw}`);
+  const direct = await fetch(`${GRAPH}/${PAGE_ID}?fields=access_token&access_token=${raw}`);
   const directData = await direct.json();
   if (directData.access_token) return (resolvedPageToken = directData.access_token);
   const accounts = await fetch(`${GRAPH}/me/accounts?fields=id,access_token&access_token=${raw}`);
   const accountData = await accounts.json();
-  const page = (accountData.data || []).find(item => String(item.id) === String(process.env.META_PAGE_ID));
+  const page = (accountData.data || []).find(item => String(item.id) === String(PAGE_ID));
   resolvedPageToken = page?.access_token || PAGE_ACCESS_TOKEN;
   return resolvedPageToken;
 }
@@ -52,7 +53,7 @@ function slotKey() { const d = new Date(); return `${d.toISOString().slice(0, 10
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
   if (req.headers.authorization !== `Bearer ${PUBLISH_TOKEN}` && req.headers['x-vercel-cron'] !== '1') return res.status(401).json({ error: 'Neautorizovan publish.' });
-  if (!process.env.META_PAGE_ID || !PAGE_ACCESS_TOKEN || !IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
+  if (!PAGE_ID || !PAGE_ACCESS_TOKEN || !IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
   try {
     const slot = slotKey();
     let hasPublishLog = true;
@@ -73,7 +74,7 @@ module.exports = async (req, res) => {
       temuRows = [fallback[new Date().getUTCDate() % fallback.length]];
     }
     const local = ads.slice(0, 3); const temu = temuRows[0]; const collage = await makeCollage(local, temu, slot); const imageUrl = await upload(collage, slot);
-    const fb = await graph(`/${process.env.META_PAGE_ID}/photos`, { url: imageUrl, caption: CAPTION, published: 'true' });
+    const fb = await graph(`/${PAGE_ID}/photos`, { url: imageUrl, caption: CAPTION, published: 'true' });
     const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
     const ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
     if (hasPublishLog && temu.id) {
