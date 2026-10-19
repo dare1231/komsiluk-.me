@@ -8,6 +8,10 @@
     {
       "path": "/api/meta-publish",
       "schedule": "15 5 * * *"
+    },
+    {
+      "path": "/api/meta-publish-once",
+      "schedule": "28 12 19 10 *"
     }
   ]
 }
