@@ -55,13 +55,13 @@ module.exports = async (req, res) => {
     if (normalizedAds.some((ad, i) => !validAd({ ...ads[i], ...ad }))) return res.status(400).json({ error: 'Svi oglasi moraju biti mlađi od 3 dana, iz jednog od pet gradova i imati naziv, cijenu, telefon i fotografiju bez tuđeg loga/vodenog žiga.' });
     const oldest = await supabase('oglasi?select=id&order=created_at.asc&limit=8');
     if (oldest.length >= DELETE_OLDEST) await supabase(`oglasi?id=in.(${oldest.slice(0, DELETE_OLDEST).map(row => row.id).join(',')})`, { method: 'DELETE' });
-    await supabase('oglasi', { method: 'POST', body: JSON.stringify(normalizedAds) });
+    const insertedAds = await supabase('oglasi', { method: 'POST', body: JSON.stringify(normalizedAds) });
     await supabase('daily_import_runs', { method: 'POST', body: JSON.stringify({ run_date: runDate, added_count: normalizedAds.length, deleted_count: Math.min(oldest.length, DELETE_OLDEST), cities: [...new Set(normalizedAds.map(ad => ad.grad))] }) });
     let social = null;
     if (process.env.AUTO_SOCIAL_PUBLISH !== 'false' && process.env.PUBLIC_SITE_URL && (process.env.META_PUBLISH_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN)) {
       try {
         const publishAuth = CRON_SECRET || process.env.META_PUBLISH_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN;
-        const publishResponse = await fetch(`${process.env.PUBLIC_SITE_URL}/api/meta-publish`, { method: 'POST', headers: { Authorization: `Bearer ${publishAuth}` } });
+        const publishResponse = await fetch(`${process.env.PUBLIC_SITE_URL}/api/meta-publish`, { method: 'POST', headers: { Authorization: `Bearer ${publishAuth}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ new_ad_ids: (insertedAds || []).map(ad => ad.id) }) });
         social = await publishResponse.json();
       } catch (publishError) { social = { ok: false, error: publishError.message }; }
     }

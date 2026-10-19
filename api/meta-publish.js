@@ -1,4 +1,5 @@
 const sharp = require('sharp');
+const crypto = require('crypto');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const CAPTION = 'Najnovije na aplikaciji · link u bio';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FV47phgUExS5wI';
@@ -56,7 +57,11 @@ async function upload(buffer, slot) {
   if (!r.ok) throw new Error(`Ne mogu sačuvati kolaž (${r.status}).`);
   return `${process.env.SUPABASE_URL}/storage/v1/object/public/oglasi-slike/${path}`;
 }
-function slotKey() { const d = new Date(); return `${d.toISOString().slice(0, 10)}-${String(d.getUTCHours()).padStart(2, '0')}`; }
+function packageKey(local, temu) {
+  const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
+  return `pkg-${crypto.createHash('sha256').update(signature).digest('hex').slice(0, 24)}`;
+}
+function isDuplicateError(error) { return /duplicate key|unique constraint|23505/i.test(String(error?.message || error)); }
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
   const authorization = req.headers.authorization || '';
@@ -67,32 +72,82 @@ module.exports = async (req, res) => {
   if (!bySecret && !byCron && !byLoggedInAdmin) return res.status(401).json({ error: 'Neautorizovan publish.' });
   if (!PAGE_ID || !PAGE_ACCESS_TOKEN || !IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
   try {
-    const slot = slotKey();
-    let hasPublishLog = true;
-    let prior = [];
-    try { prior = await supabase(`social_publish_runs?select=id&slot_key=eq.${encodeURIComponent(slot)}&limit=1`); }
-    catch (e) { if (String(e.message).includes('social_publish_runs')) hasPublishLog = false; else throw e; }
-    if (prior.length) return res.status(200).json({ ok: true, skipped: true, message: 'Objava za ovaj paket je već poslata.' });
-    const ads = await supabase('oglasi?select=*&odobreno=eq.true&order=created_at.desc&limit=5');
-    if (ads.length < 3) return res.status(200).json({ ok: true, skipped: true, message: 'Nema 3 lokalna oglasa za kolaž.' });
+    const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const manual = payload.manual === true;
+    if (process.env.AUTO_SOCIAL_PUBLISH === 'false' && !manual) return res.status(200).json({ ok: true, skipped: true, message: 'Automatska objava je isključena.' });
+    let runs = [];
+    try { runs = await supabase('social_publish_runs?select=oglas_id,slot_key&limit=10000'); }
+    catch (error) {
+      if (String(error.message).includes('social_publish_runs')) return res.status(500).json({ error: 'Nedostaje tabela social_publish_runs; pokreni temu-products.sql u Supabase-u.' });
+      throw error;
+    }
+    const knownIds = new Set(runs.map(row => String(row.oglas_id)));
     let temuRows = [];
     try { temuRows = await supabase('temu_products?select=*&active=eq.true&order=last_published_at.asc.nullsfirst,created_at.asc&limit=1'); }
-    catch (e) { if (!String(e.message).includes('temu_products')) throw e; }
-    if (!temuRows.length) {
-      const fallback = [
-        { naziv: 'Električna kutija za ručak za automobil', cijena: '21,28 €', image_url: 'https://img.kwcdn.com/product/open/dc454ffbfdc844f1ba1eeab73f9f361e-goods.jpeg', affiliate_url: 'https://www.temu.com/me-en/car-specific-electric-lunch-box-compatible-with--12v-car-power-outlets-uses--temperature-heating-technology-can-quickly-heat-food-and-keep-meals-warm-non-food-contact-g-606289727985146.html?top_gallery_url=https%3A%2F%2Fimg.kwcdn.com%2Fproduct%2Fopen%2Fdc454ffbfdc844f1ba1eeab73f9f361e-goods.jpeg' },
-        { naziv: 'Radio za vanredne situacije', cijena: '42,17 €', image_url: 'https://img.kwcdn.com/product/fancy/5ac9a871-a7de-4d15-9604-9c5e28626d4d.jpg', affiliate_url: 'https://www.temu.com/me-en/10000mah-37000-mwh-emergency-weather-radio-solar-hand-crank-portable-radio-with-am-fm--battery-operated-3-mode-flashlight-reading-lamp-sos-alarm-phone-charger-for-indoor-outdoor-emergency-g-601104593278176.html?top_gallery_url=https%3A%2F%2Fimg.kwcdn.com%2Fproduct%2Ffancy%2F5ac9a871-a7de-4d15-9604-9c5e28626d4d.jpg' }
-      ];
-      temuRows = [fallback[new Date().getUTCDate() % fallback.length]];
+    catch (error) { if (!String(error.message).includes('temu_products')) throw error; }
+    const fallback = [
+      { naziv: 'Električna kutija za ručak za automobil', cijena: '21,28 €', image_url: 'https://img.kwcdn.com/product/open/dc454ffbfdc844f1ba1eeab73f9f361e-goods.jpeg', affiliate_url: 'https://www.temu.com/me-en/car-specific-electric-lunch-box-compatible-with--12v-car-power-outlets-uses--temperature-heating-technology-can-quickly-heat-food-and-keep-meals-warm-non-food-contact-g-606289727985146.html?top_gallery_url=https%3A%2F%2Fimg.kwcdn.com%2Fproduct%2Fopen%2Fdc454ffbfdc844f1ba1eeab73f9f361e-goods.jpeg' },
+      { naziv: 'Radio za vanredne situacije', cijena: '42,17 €', image_url: 'https://img.kwcdn.com/product/fancy/5ac9a871-a7de-4d15-9604-9c5e28626d4d.jpg', affiliate_url: 'https://www.temu.com/me-en/10000mah-37000-mwh-emergency-weather-radio-solar-hand-crank-portable-radio-with-am-fm--battery-operated-3-mode-flashlight-reading-lamp-sos-alarm-phone-charger-for-indoor-outdoor-emergency-g-601104593278176.html?top_gallery_url=https%3A%2F%2Fimg.kwcdn.com%2Fproduct%2Ffancy%2F5ac9a871-a7de-4d15-9604-9c5e28626d4d.jpg' }
+    ];
+    const defaultTemu = temuRows[0] || fallback[new Date().getUTCDate() % fallback.length];
+    let requestedIds = Array.isArray(payload.new_ad_ids) ? [...new Set(payload.new_ad_ids.map(Number).filter(id => Number.isSafeInteger(id) && id > 0))] : [];
+    if (!requestedIds.length && manual) {
+      const recent = await supabase('oglasi?select=id&odobreno=eq.true&order=created_at.desc&limit=3');
+      requestedIds = recent.map(row => Number(row.id));
     }
-    const local = ads.slice(0, 3); const temu = temuRows[0]; const collage = await makeCollage(local, temu, slot); const imageUrl = await upload(collage, slot);
-    const fb = await graph(`/${PAGE_ID}/photos`, { url: imageUrl, caption: CAPTION, published: 'true' });
-    const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
-    const ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
-    if (hasPublishLog && temu.id) {
-      for (const o of local) await supabase('social_publish_runs', { method: 'POST', body: JSON.stringify({ slot_key: slot, oglas_id: o.id, temu_product_id: temu.id, facebook_post_id: fb.id || null, instagram_media_id: ig.id || null, caption: CAPTION }) });
-      await supabase(`temu_products?id=eq.${temu.id}`, { method: 'PATCH', body: JSON.stringify({ last_published_at: new Date().toISOString() }) });
+    if (requestedIds.length) {
+      const approved = await supabase(`oglasi?select=id&odobreno=eq.true&id=in.(${requestedIds.join(',')})`);
+      const toQueue = approved.filter(row => !knownIds.has(String(row.id)));
+      for (const row of toQueue) {
+        try {
+          await supabase('social_publish_runs', { method: 'POST', body: JSON.stringify({ slot_key: 'queue', oglas_id: row.id, temu_product_id: defaultTemu.id || 0, facebook_post_id: null, instagram_media_id: null, caption: CAPTION }) });
+          knownIds.add(String(row.id));
+        } catch (error) {
+          if (!isDuplicateError(error)) throw error;
+        }
+      }
     }
-    return res.status(200).json({ ok: true, published: true, slot, local_ads: local.map(o => o.id), temu_product: temu.naziv, facebook: fb.id, instagram: ig.id, log_saved: hasPublishLog });
+    const queued = await supabase('social_publish_runs?select=oglas_id,temu_product_id&slot_key=eq.queue&order=created_at.asc&limit=3');
+    if (queued.length < 3) return res.status(200).json({ ok: true, skipped: true, pending_ads: queued.length, required_ads: 3, message: `Čeka se još ${3 - queued.length} odobrena lokalna oglasa za paket.` });
+    const ids = queued.map(row => Number(row.oglas_id));
+    const ads = await supabase(`oglasi?select=*&odobreno=eq.true&id=in.(${ids.join(',')})`);
+    const adsById = new Map(ads.map(row => [String(row.id), row]));
+    const local = ids.map(id => adsById.get(String(id))).filter(Boolean);
+    if (local.length < 3) {
+      const invalidIds = ids.filter(id => !adsById.has(String(id)));
+      if (invalidIds.length) await supabase(`social_publish_runs?slot_key=eq.queue&oglas_id=in.(${invalidIds.join(',')})`, { method: 'DELETE' });
+      return res.status(200).json({ ok: true, skipped: true, message: 'Paket čeka tri važeća odobrena oglasa.' });
+    }
+    const temuId = Number(queued[0].temu_product_id || 0);
+    let temu = defaultTemu;
+    if (temuId > 0) {
+      const productRows = await supabase(`temu_products?select=*&id=eq.${temuId}&limit=1`);
+      if (productRows.length) temu = productRows[0];
+    }
+    const slot = packageKey(local, temu);
+    const collage = await makeCollage(local, temu, slot);
+    const imageUrl = await upload(collage, slot);
+    const claimed = await supabase(`social_publish_runs?slot_key=eq.queue&oglas_id=in.(${ids.join(',')})`, { method: 'PATCH', body: JSON.stringify({ slot_key: slot }) });
+    if (claimed.length < 3) return res.status(200).json({ ok: true, skipped: true, message: 'Ovaj paket već obrađuje drugi zahtjev.' });
+    let fb = null, ig = null;
+    try {
+      fb = await graph(`/${PAGE_ID}/photos`, { url: imageUrl, caption: CAPTION, published: 'true' });
+      await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ facebook_post_id: fb.id || null }) });
+      const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
+      ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
+      await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ instagram_media_id: ig.id || null }) });
+    } catch (error) {
+      if (!fb) {
+        try { await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ slot_key: 'queue' }) }); }
+        catch (releaseError) { console.error('[Meta queue release]', releaseError); }
+        throw error;
+      }
+      return res.status(502).json({ ok: false, partial: true, facebook_published: true, instagram_published: Boolean(ig), error: error.message, slot });
+    }
+    if (temu.id) {
+      try { await supabase(`temu_products?id=eq.${temu.id}`, { method: 'PATCH', body: JSON.stringify({ last_published_at: new Date().toISOString() }) }); }
+      catch (error) { console.error('[Temu publish timestamp]', error); }
+    }
+    return res.status(200).json({ ok: true, published: true, slot, local_ads: local.map(o => o.id), temu_product: temu.naziv, facebook: fb.id, instagram: ig.id, log_saved: true });
   } catch (error) { console.error(error); return res.status(500).json({ error: error.message }); }
 };

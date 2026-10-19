@@ -391,6 +391,7 @@
                         <button onclick="sacuvajTemuPaket()" class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-floppy-disk mr-1"></i> Sačuvaj paket</button>
                         <button onclick="pripremiMetaObjavu()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-share-nodes mr-1"></i> Pregled objave</button>
                     </div>
+                    <button id="meta-publish-now" onclick="objaviMetaSada()" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-brands fa-facebook mr-1"></i><i class="fa-brands fa-instagram mr-1"></i> Objavi sada na Facebook i Instagram</button>
                 </div>
 
                 <!-- UPRAVLJANJE OGLASIMA -->
@@ -752,12 +753,14 @@
                     izvorni_link: noviOglas.izvorni_link || null,
                     user_id: noviOglas.user_id || null
                 };
-                const { error } = await supabaseClient.from('oglasi').insert([dbOglas]);
+                const { data, error } = await supabaseClient.from('oglasi').insert([dbOglas]).select('id').single();
                 if (error) { console.error(error); return { ok: false, msg: error.message }; }
-                return { ok: true };
+                return { ok: true, id: data?.id };
             },
             async promeniStatusOdobrenja(id, trenutniStatus) {
-                await supabaseClient.from('oglasi').update({ odobreno: !trenutniStatus }).eq('id', id);
+                const { error } = await supabaseClient.from('oglasi').update({ odobreno: !trenutniStatus }).eq('id', id);
+                if (error) { console.error(error); return; }
+                if (!trenutniStatus) await objaviMetaAutomatski([id], true);
             },
             async azurirajSliku(id, novaSlikaUrl) {
                 const { error } = await supabaseClient.from('oglasi').update({ img: novaSlikaUrl }).eq('id', id);
@@ -1396,6 +1399,20 @@
             return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' } : null;
         }
 
+        async function objaviMetaAutomatski(newAdIds = [], notify = false) {
+            const headers = await authHeaders();
+            if (!headers || !newAdIds.length) return;
+            try {
+                const response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ new_ad_ids: newAdIds }) });
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Automatska objava nije uspjela.');
+                if (body.published) toast('Paket od 3 oglasa i 1 Temu proizvoda objavljen je na Facebooku i Instagramu.', 'ok');
+            } catch (error) {
+                console.error('[Komsiluk Meta auto-publish]', error);
+                if (notify) toast('Oglas je sačuvan, ali objava na mrežama nije uspjela: ' + error.message, 'err');
+            }
+        }
+
         async function ucitajTemuPaket() {
             const status = document.getElementById('temu-paket-status');
             if (!status) return;
@@ -1443,6 +1460,36 @@
             const opis = `${ads.map(o => `${o.naziv} (${o.grad})`).join(' · ')} · ${temu.naziv} (Temu)`;
             toast('Spremno za objavu: ' + opis, 'ok');
             console.info('[Komsiluk Meta preview]', { localAds: ads, temu });
+        }
+
+        async function objaviMetaSada() {
+            const headers = await authHeaders();
+            if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
+            const button = document.getElementById('meta-publish-now');
+            const status = document.getElementById('temu-paket-status');
+            const original = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Objavljujem...';
+            status.innerText = 'Šaljem kolaž na Facebook i Instagram...';
+            try {
+                const response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ manual: true }) });
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Objava nije uspjela.');
+                if (body.published) {
+                    status.innerText = 'Objava je poslata na Facebook i Instagram.';
+                    toast('Objava je poslata na Facebook i Instagram.', 'ok');
+                } else {
+                    const message = body.message || 'Objava je preskočena.';
+                    status.innerText = message;
+                    toast(message, body.skipped ? 'info' : 'err');
+                }
+            } catch (error) {
+                status.innerText = error.message;
+                toast(error.message, 'err');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = original;
+            }
         }
 
         async function proveriPostojecuSesiju() {
@@ -1531,6 +1578,7 @@
             ['turbo-tekst', 'turbo-grad', 'turbo-cena', 'turbo-izvorni-link', 'turbo-slika'].forEach(id => document.getElementById(id).value = '');
             await ucitajAdminPanelOglase();
             await prikaziOglasePremaFilteru();
+            await objaviMetaAutomatski([rezultat.id], true);
         }
 
         async function objaviNoviOglas() {
@@ -1573,6 +1621,7 @@
             document.getElementById('select-kvart').value = kvart;
             azurirajLokacijuUI();
             await prikaziOglasePremaFilteru();
+            await objaviMetaAutomatski([rezultat.id], true);
             toast('Oglas uspješno postavljen! 🎉 (+10 poena za 7 dana ako ostane aktivan)', 'ok');
         }
 
