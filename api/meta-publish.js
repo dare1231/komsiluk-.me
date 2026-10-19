@@ -2,6 +2,7 @@ const sharp = require('sharp');
 const crypto = require('crypto');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const CAPTION = 'Najnovije na aplikaciji · link u bio';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://revfltrlzwmcyqnquvfa.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FV47phgUExS5wI';
 const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL || '';
 const PAGE_ID = process.env.FB_PAGE_ID || process.env.META_PAGE_ID || '';
@@ -11,8 +12,8 @@ const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
 let resolvedPageToken = null;
 async function isSupabaseUserToken(token) {
-  if (!token || !process.env.SUPABASE_URL) return false;
-  const response = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
+  if (!token) return false;
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
   return response.ok;
 }
 async function getPageToken() {
@@ -29,7 +30,7 @@ async function getPageToken() {
 }
 const publicImage = img => img && img.startsWith('http') ? img : `${PUBLIC_SITE_URL}${img || '/assets/neutral-product.svg'}`;
 async function supabase(path, options = {}) {
-  const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${path}`, { ...options, headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(options.headers || {}) } });
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...options, headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(options.headers || {}) } });
   const text = await r.text(); let data; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!r.ok) throw new Error(data?.message || text || `Supabase ${r.status}`); return data;
 }
@@ -53,9 +54,9 @@ async function makeCollage(localAds, temu, slot) {
 }
 async function upload(buffer, slot) {
   const path = `social-collages/${slot}.jpg`;
-  const r = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/oglasi-slike/${path}`, { method: 'POST', headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' }, body: buffer });
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/oglasi-slike/${path}`, { method: 'POST', headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' }, body: buffer });
   if (!r.ok) throw new Error(`Ne mogu sačuvati kolaž (${r.status}).`);
-  return `${process.env.SUPABASE_URL}/storage/v1/object/public/oglasi-slike/${path}`;
+  return `${SUPABASE_URL}/storage/v1/object/public/oglasi-slike/${path}`;
 }
 function packageKey(local, temu) {
   const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
