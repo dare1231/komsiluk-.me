@@ -4,6 +4,7 @@ const MAX_AGE_DAYS = 3;
 const DELETE_OLDEST = 3;
 const WATERMARK_RE = /(watermark|water-mark|logo|facebook|instagram|olx|patuljak|oglasi|kupujem|prodajem)/i;
 const FALLBACK_IMAGE = process.env.NEUTRAL_IMAGE_URL || '/assets/neutral-product.svg';
+const CRON_SECRET = process.env.CRON_SECRET || '';
 
 function cleanPhone(value) { return String(value || '').trim().replace(/[^+0-9()\-\s]/g, ''); }
 function validAd(ad) {
@@ -40,7 +41,10 @@ async function getAdsFromSource() {
 
 module.exports = async (req, res) => {
   if (!['POST', 'GET'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
-  if (req.headers.authorization !== `Bearer ${process.env.DAILY_IMPORT_TOKEN}` && req.headers['x-vercel-cron'] !== '1') return res.status(401).json({ error: 'Neautorizovan dnevni uvoz.' });
+  const authorization = req.headers.authorization || '';
+  const byDailyToken = Boolean(process.env.DAILY_IMPORT_TOKEN && authorization === `Bearer ${process.env.DAILY_IMPORT_TOKEN}`);
+  const byCron = Boolean(CRON_SECRET && authorization === `Bearer ${CRON_SECRET}`);
+  if (!byDailyToken && !byCron) return res.status(401).json({ error: 'Neautorizovan dnevni uvoz.' });
   try {
     const runDate = new Date().toISOString().slice(0, 10);
     const existingRun = await supabase(`daily_import_runs?select=id,added_count,deleted_count&run_date=eq.${runDate}&limit=1`);
@@ -56,7 +60,8 @@ module.exports = async (req, res) => {
     let social = null;
     if (process.env.AUTO_SOCIAL_PUBLISH !== 'false' && process.env.PUBLIC_SITE_URL && (process.env.META_PUBLISH_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN)) {
       try {
-        const publishResponse = await fetch(`${process.env.PUBLIC_SITE_URL}/api/meta-publish`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.META_PUBLISH_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN}` } });
+        const publishAuth = CRON_SECRET || process.env.META_PUBLISH_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN;
+        const publishResponse = await fetch(`${process.env.PUBLIC_SITE_URL}/api/meta-publish`, { method: 'POST', headers: { Authorization: `Bearer ${publishAuth}` } });
         social = await publishResponse.json();
       } catch (publishError) { social = { ok: false, error: publishError.message }; }
     }
