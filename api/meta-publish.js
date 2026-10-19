@@ -18,6 +18,8 @@ async function isSupabaseUserToken(token) {
 }
 async function getPageToken() {
   if (resolvedPageToken) return resolvedPageToken;
+  const directPageToken = process.env.FB_PAGE_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN;
+  if (directPageToken) return (resolvedPageToken = directPageToken);
   const raw = encodeURIComponent(PAGE_ACCESS_TOKEN);
   const direct = await fetch(`${GRAPH}/${PAGE_ID}?fields=access_token&access_token=${raw}`);
   const directData = await direct.json();
