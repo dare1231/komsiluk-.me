@@ -1,0 +1,2133 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#10b981">
+    <meta name="description" content="Komšiluk.me — kupi, prodaj i pokloni u svom kraju. Besplatni lokalni oglasi za Podgoricu i cijelu Crnu Goru.">
+    <meta property="og:title" content="Komšiluk.me — oglasi iz tvog kraja">
+    <meta property="og:description" content="Pronađi kupca ili dobru ponudu u komšiluku. Objavi oglas besplatno za 30 sekundi.">
+    <meta property="og:type" content="website">
+    <title>Komšiluk.me | Oglasi iz tvog kraja</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669', 700: '#047857' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; margin: 0; padding: 0;
+        }
+        @media (min-width: 640px) {
+            body { padding: 20px 0; }
+        }
+
+        .app-container {
+            width: 100%; max-width: 420px; height: 100vh; max-height: 880px;
+            background-color: #f8fafc; display: flex; flex-direction: column;
+            position: relative; overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+        }
+        @media (min-width: 421px) {
+            .app-container { border-radius: 40px; border: 8px solid #334155; height: 86vh; }
+        }
+
+        .safe-top { padding-top: env(safe-area-inset-top); }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+        .mapa-grid-plava {
+            background-color: #f0f9ff;
+            background-image: radial-gradient(circle at 1px 1px, rgba(14, 165, 233, 0.2) 1.5px, transparent 0);
+            background-size: 24px 24px;
+        }
+
+        @keyframes fadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+        .anim-fade-up { animation: fadeUp .3s ease both; }
+
+        @keyframes popIn { 0% { opacity:0; transform: scale(.5); } 70% { transform: scale(1.08); } 100% { opacity:1; transform: scale(1); } }
+        .pin-pop { animation: popIn .3s cubic-bezier(.34,1.56,.64,1) both; }
+
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .skeleton {
+            background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
+            background-size: 200% 100%; animation: shimmer 1.3s infinite;
+        }
+
+        @keyframes spin360 { to { transform: rotate(360deg); } }
+        .spin { animation: spin360 .8s linear infinite; }
+
+        .chip { transition: all .15s ease; }
+        .chip-active { background: #0f172a !important; color: #ffffff !important; border-color: #0f172a !important; box-shadow: 0 4px 12px rgba(15,23,42,0.2); }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <div class="app-container flex flex-col justify-between">
+
+        <!-- GORNJA NAVIGACIJA & STATUS -->
+        <header class="bg-white border-b border-slate-100 sticky top-0 z-40 safe-top flex-shrink-0 shadow-sm">
+            <div class="px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                    <button onclick="vratiNaGlavnu()" title="Nazad na početnu" class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-brand-50 hover:text-brand-600 hover:border-brand-200 transition shadow-sm">
+                        <i class="fa-solid fa-house text-xs"></i>
+                    </button>
+                    <div>
+                        <h1 id="naslov-grada" class="font-extrabold text-sm tracking-tight text-slate-900 leading-none">Podgorica (Blok 5)</h1>
+                        <span id="kvart-label" class="text-[11px] font-semibold text-brand-600 flex items-center mt-0.5">
+                            <i class="fa-solid fa-location-dot mr-1"></i> Blok 5
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button onclick="osvjeziPodatke()" title="Osvježi" class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-brand-50 hover:text-brand-600 transition">
+                        <i id="ikonica-refresh" class="fa-solid fa-rotate text-xs"></i>
+                    </button>
+                    <button id="dugme-nalog" onclick="otvoriNalogModal()" title="Registruj se / Prijavi se" style="display:none" class="h-9 px-3 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs hover:bg-brand-50 hover:text-brand-600 transition">
+                        <i class="fa-solid fa-user text-xs"></i>
+                    </button>
+                    <button onclick="proveriPristupPanelu()" class="w-9 h-9 rounded-xl bg-brand-500 text-white flex items-center justify-center font-extrabold text-xs shadow-md shadow-brand-500/20 hover:bg-brand-600 transition">
+                        DB
+                    </button>
+                </div>
+            </div>
+
+            <!-- Izbor grada i kvarta -->
+            <div class="px-4 pb-3 grid grid-cols-2 gap-2 bg-slate-50/80 pt-2 border-t border-slate-100">
+                <select id="select-grad" onchange="azurirajLokaciju(true)" class="bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-2.5 py-2 focus:outline-none focus:border-brand-500 shadow-sm">
+                    <option value="Podgorica" selected>Podgorica</option>
+                    <option value="Nikšić">Nikšić</option>
+                    <option value="Bar">Bar</option>
+                    <option value="Budva">Budva</option>
+                    <option value="Kotor">Kotor</option>
+                    <option value="Herceg Novi">Herceg Novi</option>
+                    <option value="Tivat">Tivat</option>
+                    <option value="Ulcinj">Ulcinj</option>
+                    <option value="Cetinje">Cetinje</option>
+                    <option value="Bijelo Polje">Bijelo Polje</option>
+                    <option value="Berane">Berane</option>
+                    <option value="Pljevlja">Pljevlja</option>
+                    <option value="Rožaje">Rožaje</option>
+                    <option value="Kolašin">Kolašin</option>
+                    <option value="Žabljak">Žabljak</option>
+                    <option value="Mojkovac">Mojkovac</option>
+                    <option value="Plav">Plav</option>
+                    <option value="Andrijevica">Andrijevica</option>
+                    <option value="Danilovgrad">Danilovgrad</option>
+                    <option value="Tuzi">Tuzi</option>
+                    <option value="Gusinje">Gusinje</option>
+                    <option value="Petnjica">Petnjica</option>
+                    <option value="Šavnik">Šavnik</option>
+                    <option value="Plužine">Plužine</option>
+                </select>
+                <select id="select-kvart" onchange="azurirajLokaciju(false)" class="bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-2.5 py-2 focus:outline-none focus:border-brand-500 shadow-sm">
+                    <option value="Blok 5" selected>Blok 5</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- STATUS MREŽE -->
+        <div id="status-mreze" class="bg-emerald-50 border-b border-emerald-100 px-3 py-1 text-[10px] font-bold text-emerald-700 text-center flex-shrink-0">
+            <i class="fa-solid fa-wifi mr-1"></i> Povezani ste na mrežu
+        </div>
+
+        <!-- CENTRALNI DEO -->
+        <main id="glavni-scroll" class="flex-1 overflow-y-auto no-scrollbar relative flex flex-col p-4 space-y-3 pb-24">
+
+            <!-- TAB 1: KOMŠILUK -->
+            <div id="tab-home" class="space-y-3">
+
+                <!-- PREKIDAČ: OGLASI / ZAJEDNICA -->
+                <div class="flex bg-slate-200/80 p-1 rounded-xl shadow-inner anim-fade-up">
+                    <button onclick="promeniGlavniTab('oglasi')" id="glavni-tab-btn-oglasi" class="flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1.5">
+                        <i class="fa-solid fa-cart-shopping"></i><span>Oglasi</span>
+                    </button>
+                    <button onclick="promeniGlavniTab('zajednica')" id="glavni-tab-btn-zajednica" class="flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1.5">
+                        <i class="fa-solid fa-bullhorn"></i><span>Zajednica</span>
+                    </button>
+                </div>
+
+                <!-- BANER ZA POSTAVLJANJE OGLASA -->
+                <div id="kontejner-oglasi-tab" class="space-y-3">
+                <div class="bg-gradient-to-r from-brand-600 to-emerald-700 rounded-2xl p-4 text-white shadow-lg shadow-brand-500/20 flex items-center justify-between anim-fade-up">
+                    <div>
+                        <h2 class="font-bold text-sm">Prodaj, pokloni ili pronađi nešto blizu sebe</h2>
+                        <p class="text-xs text-emerald-100 mt-0.5">Besplatno je, nema provizije i traje manje od 30 sekundi.</p>
+                    </div>
+                    <button onclick="otvoriObjavu()" class="bg-white text-brand-700 font-bold px-4 py-2 rounded-xl text-xs shadow hover:bg-emerald-50 transition flex-shrink-0">
+                        + Postavi
+                    </button>
+                </div>
+
+                <div onclick="otvoriPravilaModal()" class="bg-gradient-to-r from-amber-400 to-orange-500 rounded-2xl p-3.5 text-white shadow-lg shadow-amber-500/20 flex items-center justify-between anim-fade-up cursor-pointer">
+                    <div class="flex items-center space-x-2.5">
+                        <img src="https://img.kwcdn.com/product/fancy/50093671-9fa7-4b52-b1cc-f05fe8b2d9bc.jpg?imageView2/2/w/800/q/70/format/avif" alt="Pametan sat" class="w-10 h-10 object-cover rounded-xl border-2 border-white/40 flex-shrink-0">
+                        <div>
+                            <h2 class="font-bold text-xs">Osvoji pametan sat!</h2>
+                            <p class="text-[11px] text-amber-50 mt-0.5">10 satova za prvih 10 koji stignu do 100 pravih oglasa</p>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-white/80 text-xs flex-shrink-0"></i>
+                </div>
+
+                <!-- ZAŠTO KOMŠILUK -->
+                <div class="grid grid-cols-3 gap-2 anim-fade-up">
+                    <div class="bg-white border border-slate-100 rounded-2xl p-2.5 text-center shadow-sm"><i class="fa-solid fa-location-dot text-brand-500 text-sm"></i><p class="text-[10px] font-extrabold text-slate-700 mt-1">Blizu tebe</p><p class="text-[9px] text-slate-400">tvoj grad</p></div>
+                    <div class="bg-white border border-slate-100 rounded-2xl p-2.5 text-center shadow-sm"><i class="fa-solid fa-shield-heart text-sky-500 text-sm"></i><p class="text-[10px] font-extrabold text-slate-700 mt-1">Bez provizije</p><p class="text-[9px] text-slate-400">direktan dogovor</p></div>
+                    <div class="bg-white border border-slate-100 rounded-2xl p-2.5 text-center shadow-sm"><i class="fa-solid fa-bolt text-amber-500 text-sm"></i><p class="text-[10px] font-extrabold text-slate-700 mt-1">Brza objava</p><p class="text-[9px] text-slate-400">30 sekundi</p></div>
+                </div>
+                <!-- MINI STATISTIKA -->
+                <div class="grid grid-cols-2 gap-2.5 anim-fade-up">
+                    <div class="bg-white border border-slate-100 rounded-2xl p-3 text-center shadow-sm">
+                        <p id="stat-broj-oglasa" class="text-base font-extrabold text-brand-600">0</p>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Oglasa u krugu</p>
+                    </div>
+                    <div class="bg-white border border-slate-100 rounded-2xl p-3 text-center shadow-sm">
+                        <p id="stat-prosjecna" class="text-base font-extrabold text-amber-500">—</p>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prosječna cijena</p>
+                    </div>
+                </div>
+
+                <!-- KAKO RADI -->
+                <div class="bg-slate-900 text-white rounded-2xl p-3.5 shadow-lg anim-fade-up">
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-extrabold"><i class="fa-solid fa-circle-info text-emerald-300 mr-1"></i> Kako radi?</h3><span class="text-[10px] text-emerald-300 font-bold">3 laka koraka</span></div>
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div><div class="w-7 h-7 mx-auto rounded-full bg-white/10 flex items-center justify-center text-xs font-extrabold text-emerald-300">1</div><p class="text-[9px] text-slate-300 mt-1">Izaberi grad</p></div>
+                        <div><div class="w-7 h-7 mx-auto rounded-full bg-white/10 flex items-center justify-center text-xs font-extrabold text-emerald-300">2</div><p class="text-[9px] text-slate-300 mt-1">Objavi oglas</p></div>
+                        <div><div class="w-7 h-7 mx-auto rounded-full bg-white/10 flex items-center justify-center text-xs font-extrabold text-emerald-300">3</div><p class="text-[9px] text-slate-300 mt-1">Dogovori kupovinu</p></div>
+                    </div>
+                </div>
+                <!-- RADIJUS I PRETRAGA -->
+                <div class="space-y-2.5 bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm anim-fade-up">
+                    <div class="flex justify-between items-center">
+                        <p class="text-xs font-bold text-slate-700"><i class="fa-solid fa-route text-brand-500 mr-1"></i> Udaljenost</p>
+                        <span id="radijus-tekst" class="text-xs font-extrabold text-brand-600 bg-brand-50 px-2.5 py-0.5 rounded-lg border border-brand-100">Do 1 km</span>
+                    </div>
+                    <div class="flex bg-slate-100 p-1 rounded-xl">
+                        <button onclick="postaviRadijus('1km')" id="btn-rad-1" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition">1 km</button>
+                        <button onclick="postaviRadijus('5km')" id="btn-rad-5" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition">5 km</button>
+                        <button onclick="postaviRadijus('sve')" id="btn-rad-sve" class="flex-1 py-1.5 text-xs font-bold rounded-lg transition">Cijeli grad</button>
+                    </div>
+
+                    <div class="relative pt-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 translate-y-0.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="input-pretraga" oninput="pretragaPromjena(this.value)" autocomplete="off" name="pretraga-oglasa-ne-login" placeholder="Pretraži (npr. bicikl, sto...)" class="w-full bg-slate-50 border border-slate-200 pl-9 pr-8 py-2.5 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500">
+                        <button id="dugme-ocisti-pretragu" onclick="ocistiPretragu()" class="hidden absolute right-3 top-1/2 translate-y-0.5 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-circle-xmark"></i></button>
+                    </div>
+
+                    <select id="select-sortiranje" onchange="promeniSortiranje(this.value)" class="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-brand-500">
+                        <option value="najnovije">🕐 Najnovije prvo</option>
+                        <option value="cijena-rast">💶 Cijena: od najmanje</option>
+                        <option value="cijena-pad">💶 Cijena: od najveće</option>
+                        <option value="naziv">🔤 Naziv A-Z</option>
+                    </select>
+                </div>
+
+                <!-- KATEGORIJE -->
+                <div id="traka-kategorija" class="flex space-x-2 overflow-x-auto no-scrollbar pb-1 anim-fade-up"></div>
+
+                <!-- PREKIDAČ: MAPA / GRID -->
+                <div class="flex bg-slate-200/80 p-1 rounded-xl shadow-inner">
+                    <button onclick="promeniPrikaz('mapa')" id="prikaz-btn-mapa" class="flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1.5 shadow-sm">
+                        <i class="fa-solid fa-map-location-dot text-sky-600"></i><span>Plava radar mapa</span>
+                    </button>
+                    <button onclick="promeniPrikaz('grid')" id="prikaz-btn-grid" class="flex-1 py-2 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1.5">
+                        <i class="fa-solid fa-border-all text-emerald-600"></i><span>Grid oglasnik</span>
+                    </button>
+                </div>
+
+                <!-- KONTEJNERI -->
+                <div id="kontejner-sadrzaj">
+                    <div id="kontejner-mapa" class="space-y-2">
+                        <div class="bg-white border border-slate-200 rounded-3xl p-3 relative h-80 flex flex-col items-center justify-center overflow-hidden shadow-md mapa-grid-plava">
+                            <div class="absolute w-64 h-64 rounded-full border border-sky-300/40 pointer-events-none"></div>
+                            <div class="absolute w-44 h-44 rounded-full border border-sky-400/50"></div>
+                            <div class="absolute w-24 h-24 rounded-full border border-sky-500/60"></div>
+                            <div class="absolute w-4 h-4 bg-sky-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10 animate-pulse">
+                                <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                            </div>
+                            <div id="mapa-pinovi-inner" class="w-full h-full absolute inset-0"></div>
+                            <div class="absolute bottom-3 z-20 text-[11px] text-sky-800 bg-white/95 px-3 py-1.5 rounded-full border border-sky-200 shadow-md font-bold backdrop-blur-sm">
+                                👆 Klikni na pin za pregled i čet
+                            </div>
+                        </div>
+                    </div>
+                    <div id="kontejner-grid" class="hidden">
+                        <div id="lista-oglasi-inner" class="grid grid-cols-2 gap-3"></div>
+                    </div>
+                </div>
+
+                </div>
+                <!-- /kontejner-oglasi-tab -->
+
+                <!-- ZAJEDNICA TAB -->
+                <div id="kontejner-zajednica-tab" class="space-y-3 hidden">
+
+                    <div class="bg-gradient-to-r from-sky-600 to-sky-700 rounded-2xl p-4 text-white shadow-lg shadow-sky-500/20 flex items-center justify-between anim-fade-up">
+                        <div>
+                            <h2 class="font-bold text-sm">Obavještenje ili izgubljeno/nađeno?</h2>
+                            <p class="text-xs text-sky-100 mt-0.5">Podijeli sa komšijama iz kraja, besplatno.</p>
+                        </div>
+                        <button onclick="otvoriZajednicaObjavu()" class="bg-white text-sky-700 font-bold px-4 py-2 rounded-xl text-xs shadow hover:bg-sky-50 transition flex-shrink-0">
+                            + Dodaj
+                        </button>
+                    </div>
+
+                    <div class="flex space-x-2 overflow-x-auto no-scrollbar pb-1">
+                        <button onclick="promeniZajednicaFilter('sve')" id="zaj-filter-sve" class="zaj-filter-btn flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition">Sve</button>
+                        <button onclick="promeniZajednicaFilter('obavjestenje')" id="zaj-filter-obavjestenje" class="zaj-filter-btn flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition">📢 Obavještenja</button>
+                        <button onclick="promeniZajednicaFilter('izgubljeno')" id="zaj-filter-izgubljeno" class="zaj-filter-btn flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition">🔍 Izgubljeno</button>
+                        <button onclick="promeniZajednicaFilter('nadjeno')" id="zaj-filter-nadjeno" class="zaj-filter-btn flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold border transition">✅ Nađeno</button>
+                    </div>
+
+                    <div id="lista-zajednica-inner" class="space-y-2.5"></div>
+
+                </div>
+
+            </div>
+
+            <!-- TAB 2: PROFIL / PANEL -->
+            <div id="tab-panel" class="p-1 space-y-3 hidden">
+                <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm text-center">
+                    <div class="w-16 h-16 rounded-full bg-brand-100 text-brand-600 font-extrabold text-xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                        DB
+                    </div>
+                    <h2 class="font-bold text-base text-slate-900">Darko Borović</h2>
+                    <p id="panel-lokacija" class="text-xs text-slate-500 mt-0.5"><i class="fa-solid fa-location-dot text-brand-500 mr-1"></i> Podgorica, Blok 5</p>
+                    <button onclick="odjaviSeIzPanela()" class="mt-3 inline-block bg-rose-50 text-rose-600 border border-rose-200 text-[10px] font-bold px-3 py-1.5 rounded-xl uppercase tracking-wider hover:bg-rose-100 transition">🔓 Odjavi se</button>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="bg-white border border-slate-100 rounded-2xl p-3 text-center shadow-sm">
+                        <p id="admin-stat-ukupno" class="text-base font-bold text-slate-900">0</p>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase">Ukupno</p>
+                    </div>
+                    <div class="bg-white border border-slate-100 rounded-2xl p-3 text-center shadow-sm">
+                        <p id="admin-stat-odobreno" class="text-base font-bold text-emerald-600">0</p>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase">Odobreno</p>
+                    </div>
+                    <div class="bg-white border border-slate-100 rounded-2xl p-3 text-center shadow-sm">
+                        <p id="admin-stat-cekanje" class="text-base font-bold text-amber-500">0</p>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase">Čekanje</p>
+                    </div>
+                </div>
+
+                <!-- ANALITIKA SAJTA -->
+                <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700 p-4 rounded-3xl space-y-3 shadow-lg">
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-xs font-extrabold"><i class="fa-solid fa-chart-line text-emerald-400 mr-1.5"></i> Pregled aktivnosti sajta</h4>
+                        <button onclick="ucitajAnalitiku()" class="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded-lg font-bold"><i class="fa-solid fa-rotate"></i></button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="bg-white/10 rounded-2xl p-2.5 text-center"><p id="analytics-posjete" class="text-base font-extrabold text-emerald-300">—</p><p class="text-[9px] text-slate-300 font-bold uppercase">Posete</p></div>
+                        <div class="bg-white/10 rounded-2xl p-2.5 text-center"><p id="analytics-jedinstveni" class="text-base font-extrabold text-sky-300">—</p><p class="text-[9px] text-slate-300 font-bold uppercase">Ljudi</p></div>
+                        <div class="bg-white/10 rounded-2xl p-2.5 text-center"><p id="analytics-danas" class="text-base font-extrabold text-amber-300">—</p><p class="text-[9px] text-slate-300 font-bold uppercase">Danas</p></div>
+                    </div>
+                    <p id="analytics-status" class="text-[10px] text-slate-400">Broje se stvarne posete aplikaciji.</p>
+                </div>
+                <!-- PORUKE KUPACA -->
+                <div class="bg-white border border-slate-100 p-4 rounded-3xl space-y-2 shadow-sm">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <h4 class="text-xs font-extrabold text-slate-800"><i class="fa-solid fa-comments text-brand-500 mr-1.5"></i> Poruke kupaca</h4>
+                        <span id="broj-neprocitanih-tekst" class="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-lg">0</span>
+                    </div>
+                    <div id="lista-razgovora-korisnik" class="space-y-2 max-h-48 overflow-y-auto no-scrollbar">
+                        <p class="text-slate-400 text-xs text-center py-4">Učitavam poruke...</p>
+                    </div>
+                </div>
+
+                <!-- TURBO UVOZNIK -->
+                <div class="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 rounded-3xl space-y-3 shadow-sm">
+                    <div class="flex justify-between items-center border-b border-amber-200/60 pb-2">
+                        <h4 class="text-xs font-extrabold text-amber-800"><i class="fa-solid fa-bolt mr-1"></i> Turbo Uvoznik Oglasa</h4>
+                        <span class="text-[9px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded font-bold">1 klik copy-paste</span>
+                    </div>
+                    <div class="space-y-2">
+                        <textarea id="turbo-tekst" placeholder="Zalijepi cijeli tekst sa FB-a..." class="w-full bg-white border border-amber-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-amber-500 h-20 shadow-sm"></textarea>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="turbo-grad" placeholder="Grad (npr. Podgorica)" class="bg-white border border-amber-200 p-2 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-amber-500 shadow-sm">
+                            <input type="text" id="turbo-cena" placeholder="Cijena (npr. 50 €)" class="bg-white border border-amber-200 p-2 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-amber-500 shadow-sm">
+                        </div>
+                        <input type="text" id="turbo-izvorni-link" placeholder="Link originalnog FB oglasa" class="w-full bg-white border border-amber-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-amber-500 shadow-sm">
+                        <input type="text" id="turbo-slika" placeholder="Link slike (Copy image address)" class="w-full bg-white border border-amber-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-amber-500 shadow-sm">
+                        <button onclick="turboUveziOglas()" class="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition">🚀 Izbaci oglas na sajt odmah</button>
+                    </div>
+                </div>
+
+                <!-- DNEVNI TEMU PAKET + META OBJAVA -->
+                <div class="bg-gradient-to-br from-orange-50 to-rose-50 border border-orange-200 p-4 rounded-3xl space-y-3 shadow-sm">
+                    <div class="flex justify-between items-center border-b border-orange-200/70 pb-2">
+                        <h4 class="text-xs font-extrabold text-orange-900"><i class="fa-solid fa-bag-shopping text-orange-500 mr-1.5"></i> 3 Temu linka za danas</h4>
+                        <span class="text-[9px] bg-orange-200 text-orange-900 px-2 py-0.5 rounded font-bold">DNEVNI PAKET</span>
+                    </div>
+                    <p class="text-[10px] text-orange-800">Unesi tri proizvoda. Aplikacija će pokušati preuzeti naziv, sliku i cijenu, pa ih spojiti sa 3 najnovija lokalna oglasa.</p>
+                    <div class="space-y-2">
+                        <input id="temu-link-1" type="url" placeholder="1. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
+                        <input id="temu-link-2" type="url" placeholder="2. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
+                        <input id="temu-link-3" type="url" placeholder="3. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
+                    </div>
+                    <div id="temu-paket-status" class="text-[10px] text-slate-500">Paket još nije učitan.</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="sacuvajTemuPaket()" class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-floppy-disk mr-1"></i> Sačuvaj paket</button>
+                        <button onclick="pripremiMetaObjavu()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-share-nodes mr-1"></i> Pregled objave</button>
+                    </div>
+                    <button id="meta-publish-now" onclick="objaviMetaSada()" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-brands fa-facebook mr-1"></i><i class="fa-brands fa-instagram mr-1"></i> Objavi sada na Facebook i Instagram</button>
+                    <button id="meta-republish-now" onclick="objaviMetaSada(true)" class="w-full bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition mt-2"><i class="fa-solid fa-rotate mr-1"></i> Objavi ponovo (zadnji paket, novi dizajn)</button>
+                </div>
+
+                <!-- UPRAVLJANJE OGLASIMA -->
+                <div class="bg-white border border-slate-100 p-4 rounded-3xl space-y-3 shadow-sm">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <h4 class="text-xs font-extrabold text-slate-800"><i class="fa-solid fa-shield-halved text-brand-500 mr-1.5"></i> Upravljanje oglasima</h4>
+                        <span id="panel-broj-total" class="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-lg">0</span>
+                    </div>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="input-admin-pretraga" oninput="adminPretragaPromjena(this.value)" placeholder="Pretraži bazu oglasa..." class="w-full bg-slate-50 border border-slate-200 pl-9 pr-3 py-2 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                    </div>
+                    <div id="panel-lista-upravljanje" class="space-y-2 max-h-64 overflow-y-auto no-scrollbar"></div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- DONJA NAVIGACIJA -->
+        <nav class="bg-white border-t border-slate-100 px-4 py-2 flex justify-around items-center relative z-40 flex-shrink-0 safe-bottom shadow-lg">
+            <button onclick="vratiNaGlavnu()" class="text-brand-600 flex flex-col items-center text-[11px] font-bold transition">
+                <i class="fa-solid fa-house text-base mb-0.5"></i><span>Početna</span>
+            </button>
+            <button onclick="otvoriObjavu()" class="bg-brand-500 hover:bg-brand-600 text-white w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/30 -mt-5 border-4 border-white transition transform active:scale-95">
+                <i class="fa-solid fa-plus text-base font-black"></i>
+            </button>
+            <button onclick="proveriPristupPanelu()" class="text-slate-400 hover:text-slate-700 flex flex-col items-center text-[11px] font-bold transition">
+                <i class="fa-solid fa-user text-base mb-0.5"></i><span>Profil</span>
+            </button>
+        </nav>
+
+        <!-- TOAST KONTEJNER -->
+        <div id="toast-kontejner" class="absolute bottom-24 left-0 right-0 z-[70] flex flex-col items-center space-y-2 pointer-events-none px-4"></div>
+
+        <!-- MODAL: PRIJAVA -->
+        <div id="modal-sifra" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white border border-slate-100 w-full max-w-[320px] rounded-3xl p-5 space-y-4 shadow-2xl text-center anim-fade-up">
+                <div class="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 mx-auto shadow-sm">
+                    <i class="fa-solid fa-lock text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-sm text-slate-900">Admin Panel - Prijava</h3>
+                    <p class="text-[11px] text-slate-500 mt-1">Uloguj se da upravljaš oglasima:</p>
+                </div>
+                <input type="email" id="input-admin-email" placeholder="Email..." class="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs text-slate-800 text-center font-bold focus:outline-none focus:border-brand-500 shadow-sm">
+                <input type="password" id="input-sifra" placeholder="Lozinka..." onkeydown="if(event.key==='Enter')potvrdiSifru()" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs text-slate-800 text-center font-bold tracking-widest focus:outline-none focus:border-brand-500 shadow-sm">
+                <div class="flex space-x-2 pt-1">
+                    <button onclick="zatvoriSifru()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 rounded-xl text-xs transition">Odustani</button>
+                    <button id="dugme-potvrdi-prijavu" onclick="potvrdiSifru()" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-md shadow-brand-500/20 transition">Prijavi se</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: DETALJI OGLASA I ČET -->
+        <div id="modal-oglas" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end justify-center">
+            <div class="bg-white border border-slate-100 w-full max-w-[420px] rounded-t-3xl p-4 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto anim-fade-up">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                    <h3 id="modal-title" class="font-bold text-sm text-slate-900 truncate flex-1 pr-2">Naziv predmeta</h3>
+                    <button id="modal-fav-dugme" onclick="toggleOmiljeniTrenutni()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:text-rose-500 mr-1.5 transition">
+                        <i id="modal-fav-ikona" class="fa-regular fa-heart text-xs"></i>
+                    </button>
+                    <button onclick="podijeliOglas()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:text-brand-600 mr-1.5 transition">
+                        <i class="fa-solid fa-share-nodes text-xs"></i>
+                    </button>
+                    <button onclick="zatvoriOglas()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Klikom otvara Lightbox (Uvećanje preko cijelog ekrana) -->
+                <div class="relative cursor-zoom-in group" onclick="otvoriLightbox()">
+                    <img id="modal-img" src="" class="w-full h-48 rounded-2xl object-cover border border-slate-100 shadow-sm group-hover:opacity-95 transition" alt="Slika">
+                    <div class="absolute bottom-2.5 right-2.5 text-[10px] text-slate-700 bg-white/90 px-2.5 py-1 rounded-lg border border-slate-200 font-bold shadow-sm backdrop-blur-sm"><i class="fa-solid fa-expand mr-1"></i>Uvećaj sliku</div>
+                </div>
+
+                <div class="flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <div>
+                        <p id="modal-price" class="text-base font-extrabold text-brand-600">45 €</p>
+                        <p id="modal-dist" class="text-[11px] text-slate-500 mt-0.5 font-semibold"><i class="fa-solid fa-location-dot text-brand-500 mr-1"></i> Udaljeno</p>
+                        <p id="modal-vrijeme" class="text-[11px] text-slate-400 mt-0.5 font-semibold"><i class="fa-regular fa-clock text-slate-400 mr-1"></i> —</p>
+                    </div>
+                    <span id="modal-badge-novo" class="hidden bg-brand-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-sm">NOVO</span>
+                </div>
+
+                <div class="bg-amber-50/70 border border-amber-200/60 p-3 rounded-2xl space-y-2">
+                    <p class="text-xs text-amber-900 font-bold">Lokacija: <span id="modal-lokacija-prodavca" class="text-slate-900">Podgorica, Blok 5</span></p>
+                    <p id="modal-prodavac-red" class="text-xs text-slate-500 font-semibold mt-1 hidden">Postavio/la: <span id="modal-prodavac-nadimak" class="text-slate-800 font-bold"></span> <span id="modal-prodavac-poeni" class="bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-md text-[10px] ml-1"></span></p>
+                    <div id="modal-tel-wrapper">
+                        <a id="modal-tel-link" href="#" class="flex items-center justify-center space-x-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition">
+                            <i class="fa-solid fa-phone"></i><span id="modal-tel-tekst">Pozovi prodavca</span>
+                        </a>
+                    </div>
+                    <a id="modal-fb-link" href="#" target="_blank" rel="noopener" class="hidden items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition">
+                        <i class="fa-brands fa-facebook"></i><span>Originalni FB oglas (za tebe)</span>
+                    </a>
+                </div>
+
+                <div class="space-y-2 pt-1">
+                    <p class="text-xs font-bold text-slate-700"><i class="fa-solid fa-comments text-brand-500 mr-1"></i> Čet o ovom oglasu:</p>
+                    <div id="cet-istorija" class="bg-slate-50 h-32 rounded-2xl p-3 overflow-y-auto space-y-2 border border-slate-200 text-xs shadow-inner flex flex-col">
+                        <p class="text-slate-400 text-center pt-4">Učitavam poruke...</p>
+                    </div>
+                    <input type="text" id="input-ime-poruka" placeholder="Vaše ime..." class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                    <div class="flex space-x-2 pt-1">
+                        <input type="text" id="input-poruka" placeholder="Napiši poruku..." onkeydown="if(event.key==='Enter')posaljiPoruku()" class="flex-1 bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                        <button onclick="posaljiPoruku()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-sm transition">Pošalji</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LIGHTBOX (UVEĆAVANJE SLIKE PREKO CIJELOG EKRANA) -->
+        <div id="lightbox" onclick="zatvoriLightbox()" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[90] hidden flex items-center justify-center p-4 cursor-zoom-out">
+            <img id="lightbox-img" src="" class="max-w-full max-h-full rounded-2xl shadow-2xl object-contain border border-slate-800" alt="Uvećana slika">
+            <button onclick="zatvoriLightbox()" class="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-base transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- MODAL: POSTAVI OGLAS -->
+        <div id="modal-objava" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end justify-center">
+            <div class="bg-white border border-slate-100 w-full max-w-[420px] rounded-t-3xl p-4 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto anim-fade-up">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                    <h3 class="font-bold text-sm text-slate-900"><i class="fa-solid fa-camera text-brand-500 mr-1.5"></i> Postavi oglas</h3>
+                    <button onclick="zatvoriObjavu()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-700">Fotografija:</label>
+                    <input type="file" id="input-slika-oglasa" accept="image/*" capture="environment" class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-xl text-xs text-slate-700 font-semibold file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-brand-500 file:text-white file:font-bold file:text-xs" onchange="ucitajPregledSlike(event)">
+                    <img id="pregled-slike-oglasa" class="hidden w-full h-36 object-cover rounded-xl border border-slate-200 mt-1.5 shadow-sm">
+                </div>
+
+                <div class="space-y-3">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-700">Lokacija (Grad i kvart):</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <select id="objava-select-grad" onchange="azurirajKvartoveObjave()" class="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-brand-500 shadow-sm">
+                                <option value="Podgorica" selected>Podgorica</option>
+                                <option value="Nikšić">Nikšić</option>
+                                <option value="Bar">Bar</option>
+                                <option value="Budva">Budva</option>
+                                <option value="Kotor">Kotor</option>
+                                <option value="Herceg Novi">Herceg Novi</option>
+                                <option value="Tivat">Tivat</option>
+                                <option value="Ulcinj">Ulcinj</option>
+                                <option value="Cetinje">Cetinje</option>
+                                <option value="Bijelo Polje">Bijelo Polje</option>
+                                <option value="Berane">Berane</option>
+                                <option value="Pljevlja">Pljevlja</option>
+                                <option value="Rožaje">Rožaje</option>
+                                <option value="Kolašin">Kolašin</option>
+                                <option value="Žabljak">Žabljak</option>
+                                <option value="Mojkovac">Mojkovac</option>
+                                <option value="Plav">Plav</option>
+                                <option value="Andrijevica">Andrijevica</option>
+                                <option value="Danilovgrad">Danilovgrad</option>
+                                <option value="Tuzi">Tuzi</option>
+                                <option value="Gusinje">Gusinje</option>
+                                <option value="Petnjica">Petnjica</option>
+                                <option value="Šavnik">Šavnik</option>
+                                <option value="Plužine">Plužine</option>
+                            </select>
+                            <select id="objava-select-kvart" class="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-brand-500 shadow-sm">
+                                <option value="Blok 5" selected>Blok 5</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <input type="text" id="input-ime-oglasa" placeholder="Vaše ime..." maxlength="40" class="w-full bg-emerald-50 border border-emerald-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-emerald-500 shadow-sm">
+                    <input type="text" id="input-naziv-oglasa" placeholder="Naziv predmeta..." class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-brand-500 shadow-sm">
+                    <input type="tel" id="input-telefon-oglasa" placeholder="Broj telefona (opciono)..." class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-brand-500 shadow-sm">
+
+                    <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between cursor-pointer shadow-sm" onclick="togglePoklanjam()">
+                        <div class="flex items-center space-x-2.5">
+                            <div id="poklanjam-checkbox" class="w-5 h-5 rounded-lg border border-slate-300 bg-white flex items-center justify-center text-brand-600 transition">
+                                <i class="fa-solid fa-check text-[10px] hidden"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-800"><i class="fa-solid fa-gift text-brand-500 mr-1"></i> Poklanjam besplatno</span>
+                        </div>
+                        <span class="text-[10px] text-slate-400 font-bold">Opcija</span>
+                    </div>
+
+                    <input type="text" id="input-cena-oglasa" placeholder="Cijena u evrima (npr. 20 €)" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-brand-500 shadow-sm">
+                </div>
+                <button onclick="objaviNoviOglas()" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-brand-500/20 transition">Objavi odmah 🚀</button>
+            </div>
+        </div>
+
+        <!-- MODAL: NOVA OBJAVA ZA ZAJEDNICU -->
+        <div id="modal-zajednica" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end justify-center">
+            <div class="bg-white border border-slate-100 w-full max-w-[420px] rounded-t-3xl p-4 space-y-3 shadow-2xl max-h-[88vh] overflow-y-auto anim-fade-up">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                    <h3 class="font-bold text-sm text-slate-900"><i class="fa-solid fa-bullhorn text-sky-500 mr-1.5"></i> Nova objava za Zajednicu</h3>
+                    <button onclick="zatvoriZajednicaObjavu()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-700">Vrsta objave:</label>
+                    <select id="zaj-select-tip" class="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-sky-500">
+                        <option value="obavjestenje">📢 Obavještenje (kvar, sastanak, radovi...)</option>
+                        <option value="izgubljeno">🔍 Izgubljeno</option>
+                        <option value="nadjeno">✅ Nađeno</option>
+                    </select>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-700">Fotografija (opciono):</label>
+                    <input type="file" id="input-slika-zajednica" accept="image/*" capture="environment" class="w-full bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-xl text-xs text-slate-700 font-semibold file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-sky-500 file:text-white file:font-bold file:text-xs" onchange="ucitajPregledSlikeZajednica(event)">
+                    <img id="pregled-slike-zajednica" class="hidden w-full h-36 object-cover rounded-xl border border-slate-200 mt-1.5 shadow-sm">
+                </div>
+
+                <div class="space-y-3">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-700">Naslov:</label>
+                        <input type="text" id="zaj-input-naslov" placeholder="Npr. Nestala voda u zgradi / Izgubljen pas Reks" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-sky-500 shadow-sm">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-700">Opis:</label>
+                        <textarea id="zaj-input-opis" rows="3" placeholder="Detalji..." class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-sky-500 shadow-sm resize-none"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="zaj-select-grad" class="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:border-sky-500"></select>
+                        <input type="text" id="zaj-input-zgrada" placeholder="Zgrada/ulica (opciono)" class="bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-sky-500">
+                    </div>
+                    <input type="text" id="zaj-input-telefon" placeholder="Broj telefona (opciono)" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-sky-500 shadow-sm">
+                </div>
+                <button onclick="objaviZajednicu()" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-sky-500/20 transition">Objavi 📢</button>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: Registracija / Prijava ===== -->
+        <div id="modal-nalog" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end justify-center">
+            <div class="bg-white w-full max-w-md rounded-t-3xl p-5 space-y-3 safe-bottom">
+                <div class="flex items-center justify-between mb-1">
+                    <h3 class="font-bold text-sm text-slate-900">Nalog</h3>
+                    <button onclick="zatvoriNalogModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+                <div class="grid grid-cols-2 gap-1 bg-slate-100 rounded-xl p-1">
+                    <button id="nalog-tab-prijava" onclick="prebaciNalogTab('prijava')" class="py-2 rounded-lg text-xs font-bold text-slate-700 bg-white shadow-sm transition">Prijava</button>
+                    <button id="nalog-tab-registracija" onclick="prebaciNalogTab('registracija')" class="py-2 rounded-lg text-xs font-bold text-slate-700 transition">Registracija</button>
+                </div>
+
+                <div id="nalog-forma-prijava" class="space-y-2">
+                    <input type="email" id="prij-email" placeholder="Email" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                    <input type="password" id="prij-lozinka" placeholder="Lozinka" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                    <button onclick="posaljiPrijavu()" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-brand-500/20 transition">Prijavi se</button>
+                </div>
+
+                <div id="nalog-forma-registracija" class="space-y-2 hidden">
+                    <input type="text" id="reg-nadimak" placeholder="Nadimak (vidljiv drugima)" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                    <input type="email" id="reg-email" placeholder="Email" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                    <input type="password" id="reg-lozinka" placeholder="Lozinka (bar 6 karaktera)" class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-semibold focus:outline-none focus:border-brand-500 shadow-sm">
+                    <button onclick="posaljiRegistraciju()" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-brand-500/20 transition">Napravi nalog</button>
+                    <p class="text-[10px] text-slate-400 text-center">Registracijom prihvataš <span class="underline cursor-pointer" onclick="zatvoriNalogModal();otvoriPravilaModal()">pravila igre</span>.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: Profil (kad je ulogovan) ===== -->
+        <div id="modal-profil" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end justify-center">
+            <div class="bg-white w-full max-w-md rounded-t-3xl p-5 space-y-3 safe-bottom text-center">
+                <div class="flex items-center justify-end">
+                    <button onclick="zatvoriProfilModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+                <div class="w-16 h-16 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mx-auto text-xl font-extrabold"><i class="fa-solid fa-user"></i></div>
+                <h3 id="profil-nadimak" class="font-extrabold text-base text-slate-900"></h3>
+                <p id="profil-email" class="text-xs text-slate-400"></p>
+                <div class="bg-brand-50 rounded-2xl p-4 flex items-center justify-around">
+                    <div>
+                        <p id="profil-poeni" class="text-xl font-extrabold text-brand-600">0</p>
+                        <p class="text-[10px] text-slate-500 font-bold">POENA</p>
+                    </div>
+                    <div>
+                        <p id="profil-oglasa" class="text-xl font-extrabold text-brand-600">0</p>
+                        <p class="text-[10px] text-slate-500 font-bold">PRAVIH OGLASA</p>
+                    </div>
+                </div>
+                <button onclick="zatvoriProfilModal();otvoriPravilaModal()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs transition">🏆 Pravila igre / nagrade</button>
+                <button onclick="odjaviSe()" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-3 rounded-xl text-xs transition">Odjavi se</button>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: Pravila igre (baner nagrade) ===== -->
+        <div id="modal-pravila" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end justify-center">
+            <div class="bg-white w-full max-w-md rounded-t-3xl p-5 space-y-3 safe-bottom">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-sm text-slate-900">🏆 Pravila igre</h3>
+                    <button onclick="zatvoriPravilaModal()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+                <div class="bg-gradient-to-br from-brand-500 to-brand-600 rounded-2xl p-4 text-white text-center">
+                    <img src="https://img.kwcdn.com/product/fancy/50093671-9fa7-4b52-b1cc-f05fe8b2d9bc.jpg?imageView2/2/w/800/q/70/format/avif" alt="Pametan sat" class="w-32 h-32 object-cover rounded-2xl mx-auto mb-3 border-2 border-white/30 shadow-lg">
+                    <p class="text-sm font-extrabold leading-snug">Pametan sat 1.83" za muškarce i žene</p>
+                    <p class="text-[11px] opacity-90 mt-1">Bežični pozivi · Obavještenja iz aplikacija · Kalkulator · Alarm</p>
+                </div>
+                <div class="space-y-2.5 text-xs text-slate-700">
+                    <div class="flex items-start space-x-2"><span class="text-brand-500 font-bold">1.</span><p>Svaki oglas koji ostane aktivan <b>7 dana</b> (nije obrisan) donosi <b>10 poena</b>.</p></div>
+                    <div class="flex items-start space-x-2"><span class="text-brand-500 font-bold">2.</span><p>Najviše <b>5 oglasa dnevno</b> po nalogu se računa.</p></div>
+                    <div class="flex items-start space-x-2"><span class="text-brand-500 font-bold">3.</span><p><b>100 pravih oglasa = 1000 poena</b> — prvih 10 korisnika koji to dostignu osvajaju sat.</p></div>
+                    <div class="flex items-start space-x-2"><span class="text-brand-500 font-bold">4.</span><p>Lažni ili obrisani oglasi se ne računaju — pravi se broje samo oni koji ostanu aktivni.</p></div>
+                </div>
+                <button onclick="zatvoriPravilaModal()" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-brand-500/20 transition">Razumijem 👍</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://revfltrlzwmcyqnquvfa.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FvV47phgUExS5wI';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+            panelOtklucan = !!session;
+            adminAccessToken = session?.access_token || null;
+        });
+
+        const FALLBACK_SLIKA = 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=60';
+
+        const kvartoviGrada = {
+            "Podgorica": ["Blok 5", "Blok 6", "Blok 9", "Tološi", "City Kvart", "Centar", "Zabjelo", "Preko Morače", "Stara Varoš", "Momišići", "Gornja Gorica", "Zlatica", "Konik", "Dabovići", "Donja Gorica"],
+            "Nikšić": ["Kličevo", "Stara Varoš", "Rubeža", "Centar", "Bistrica", "Rastoci", "Željezara", "Dragova Luka", "Kočani", "Straševina", "Vidovanjski", "Grebice"],
+            "Bar": ["Topolica", "Bjeliši", "Šušanj", "Biskupada", "Centar", "Polje", "Rutke", "Zeleni Pojas", "Ilino", "Rena", "Burtaši", "Sutomorska obala"],
+            "Budva": ["Centar", "Rozino", "Dubovica", "Bečići", "Petrovac", "Rafailovići", "Jaz", "Babin Do", "Prijevor", "Sveti Stefan", "Pržno"],
+            "Kotor": ["Stari Grad", "Dobrota", "Škaljari", "Prčanj", "Perast", "Risan", "Muo", "Kavč", "Ljuta", "Stoliv"],
+            "Herceg Novi": ["Stari Grad", "Igalo", "Topla", "Savina", "Meljine", "Zelenika", "Baošići", "Đenovići", "Kamenari", "Sutorina"],
+            "Tivat": ["Centar", "Kalimanj", "Donja Lastva", "Gornja Lastva", "Seljanovo", "Mazina", "Mrčevac", "Lepetani", "Radovići"],
+            "Ulcinj": ["Stari Grad", "Pinješ", "Metering", "Bjelisi", "Dobre Vode", "Donji Štoj", "Gornji Štoj", "Velika Plaža", "Krue", "Kod Zgrade"],
+            "Cetinje": ["Stari Grad", "Donje Polje", "Bogorodičina", "Vlaška Crkva", "Gornje Polje", "Cetinjsko Polje", "Bajice"],
+            "Bijelo Polje": ["Nikoljac", "Centar", "Pruška", "Loznice", "Nedakusi", "Rasovo", "Lipnica", "Ribarevine"],
+            "Berane": ["Centar", "Livadice", "Donji Talum", "Rudeš", "Dolac", "Hareme", "Buče", "Pešca"],
+            "Pljevlja": ["Centar", "Gagovića Imanje", "Moćevac", "Guka", "Varoš", "Ševari", "Zlatiborci", "Židovići"],
+            "Rožaje": ["Centar", "Bandžovo Brdo", "Bujici", "Kaludra", "Besnik", "Grahovača"],
+            "Kolašin": ["Centar", "Breza", "Bjelasica", "Selišta", "Bare", "Mateševo"],
+            "Žabljak": ["Centar", "Bosača", "Njegovići", "Tepca", "Motički Gaj"],
+            "Mojkovac": ["Centar", "Uloševina", "Podbišće", "Ambar", "Bojišta"],
+            "Plav": ["Centar", "Hajdaroviće", "Prnjavor", "Meteor", "Brezujevići"],
+            "Andrijevica": ["Centar", "Prisoja", "Kralje", "Trešnjevik"],
+            "Danilovgrad": ["Centar", "Grlić", "Slap", "Landža", "Spuž", "Jelenak"],
+            "Tuzi": ["Centar", "Vranj", "Kušanje", "Milješ", "Sukuruć", "Dinoša"],
+            "Gusinje": ["Centar", "Vusanje", "Ali Pašini Izvori", "Martinovići"],
+            "Petnjica": ["Centar", "Krnja Jela", "Vrbica", "Lozna", "Trpezi"],
+            "Šavnik": ["Centar", "Komore", "Bukovica", "Petnjica"],
+            "Plužine": ["Centar", "Goransko", "Brezorna", "Trsa", "Stabna"]
+        };
+
+        const DB = {
+            async dajSve() {
+                const { data, error } = await supabaseClient.from('oglasi').select('*').order('created_at', { ascending: false });
+                if (error) { console.error('Greška pri učitavanju:', error); return []; }
+                return (data || []).map(o => ({ ...o, distKm: o.dist_km, telefon: o.telefon || 'Chat podrška' }));
+            },
+            async dodajOglas(noviOglas) {
+                const dbOglas = {
+                    grad: noviOglas.grad,
+                    kvart: noviOglas.kvart || 'Centar',
+                    dist_km: noviOglas.dist_km || 0.1,
+                    naziv: noviOglas.naziv,
+                    cena: noviOglas.cena,
+                    telefon: noviOglas.telefon || 'Chat',
+                    img: noviOglas.img,
+                    top: noviOglas.top || '35%',
+                    left: noviOglas.left || '40%',
+                    odobreno: noviOglas.odobreno !== undefined ? noviOglas.odobreno : true,
+                    izvorni_link: noviOglas.izvorni_link || null,
+                    user_id: noviOglas.user_id || null
+                };
+                const { data, error } = await supabaseClient.from('oglasi').insert([dbOglas]).select('id').single();
+                if (error) { console.error(error); return { ok: false, msg: error.message }; }
+                return { ok: true, id: data?.id };
+            },
+            async promeniStatusOdobrenja(id, trenutniStatus) {
+                const { error } = await supabaseClient.from('oglasi').update({ odobreno: !trenutniStatus }).eq('id', id);
+                if (error) { console.error(error); return; }
+                if (!trenutniStatus) await objaviMetaAutomatski([id], true);
+            },
+            async azurirajSliku(id, novaSlikaUrl) {
+                const { error } = await supabaseClient.from('oglasi').update({ img: novaSlikaUrl }).eq('id', id);
+                if (error) { console.error(error); return { ok: false, msg: error.message }; }
+                return { ok: true };
+            },
+            async obrisiOglas(id) {
+                await supabaseClient.from('oglasi').delete().eq('id', id);
+            },
+            async dajZajednicu() {
+                const { data, error } = await supabaseClient.from('zajednica_objave').select('*').order('created_at', { ascending: false });
+                if (error) { console.error('Greška pri učitavanju Zajednice:', error); return []; }
+                return data || [];
+            },
+            async dodajZajednicu(nova) {
+                const red = {
+                    tip: nova.tip,
+                    naslov: nova.naslov,
+                    opis: nova.opis,
+                    grad: nova.grad,
+                    kvart: nova.kvart || null,
+                    zgrada_ulica: nova.zgrada_ulica || null,
+                    img: nova.img || null,
+                    telefon: nova.telefon || null,
+                    odobreno: true
+                };
+                const { error } = await supabaseClient.from('zajednica_objave').insert([red]);
+                if (error) { console.error(error); return { ok: false, msg: error.message }; }
+                return { ok: true };
+            },
+            async obrisiZajednicu(id) {
+                await supabaseClient.from('zajednica_objave').delete().eq('id', id);
+            }
+        };
+
+        let izabraniRadijus = 'sve'; // Pri svakom novom otvaranju prikaži oglase iz cijelog grada.
+        let trenutniPrikaz = localStorage.getItem('kus_prikaz') || 'mapa';
+        let panelOtklucan = false;
+        let adminAccessToken = null;
+        let jePoklanjam = false;
+        let pretraga = '';
+        let kategorija = 'sve';
+        let sortiranje = 'najnovije';
+        let adminPretraga = '';
+        let omiljeni = new Set(JSON.parse(localStorage.getItem('kus_omiljeni') || '[]'));
+        let oglasiCache = {};
+        let oglasiVrijemeCache = {};
+        let profilCache = {}; // user_id -> { nadimak, poeni }
+
+        async function dajProfilInfo(userId) {
+            if (!userId) return null;
+            if (profilCache[userId]) return profilCache[userId];
+            const { data: profil } = await supabaseClient.from('profiles').select('nadimak').eq('id', userId).maybeSingle();
+            if (!profil) return null;
+            const { data: poeni } = await supabaseClient.rpc('poeni_korisnika', { korisnik_id: userId });
+            const info = { nadimak: profil.nadimak, poeni: poeni || 0 };
+            profilCache[userId] = info;
+            return info;
+        }
+
+        // ===== GOSTI: ime bez registracije + online status =====
+        const guestId = localStorage.getItem('kus_guest_id') || (() => { const id = crypto.randomUUID ? crypto.randomUUID() : 'g_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('kus_guest_id', id); return id; })();
+        let guestPresenceChannel = null;
+        let onlineGuestIds = new Set();
+        function guestInfoFromAd(o) {
+            const raw = typeof o?.izvorni_link === 'string' && o.izvorni_link.startsWith('guest:') ? o.izvorni_link.slice(6) : '';
+            if (!raw) return null;
+            const split = raw.indexOf(':');
+            if (split < 0) return null;
+            try { return { id: raw.slice(0, split), name: decodeURIComponent(raw.slice(split + 1)) }; } catch (_) { return null; }
+        }
+        async function osvjeziPrisustvoGosta(ime) {
+            localStorage.setItem('kus_moje_ime', ime);
+            if (guestPresenceChannel) { try { await guestPresenceChannel.track({ guest_id: guestId, name: ime }); } catch (_) {} }
+        }
+        function pokreniPrisustvoGosta() {
+            guestPresenceChannel = supabaseClient.channel('komsiluk-gosti-online', { config: { presence: { key: guestId } } });
+            guestPresenceChannel.on('presence', { event: 'sync' }, () => {
+                const state = guestPresenceChannel.presenceState();
+                onlineGuestIds = new Set(Object.values(state).flat().map(x => x.guest_id).filter(Boolean));
+                if (trenutniOglasId && oglasiCache[trenutniOglasId] && !document.getElementById('modal-oglas')?.classList.contains('hidden')) prikaziGostaUDetaljima(oglasiCache[trenutniOglasId]);
+                osvjeziZeleneTackice();
+            });
+            guestPresenceChannel.subscribe(async status => {
+                if (status === 'SUBSCRIBED') { const ime = localStorage.getItem('kus_moje_ime'); if (ime) await osvjeziPrisustvoGosta(ime); }
+            });
+        }
+        function prikaziGostaUDetaljima(o) {
+            const g = guestInfoFromAd(o); if (!g) return false;
+            document.getElementById('modal-prodavac-nadimak').innerText = g.name;
+            document.getElementById('modal-prodavac-poeni').className = 'text-[10px] ml-1';
+            document.getElementById('modal-prodavac-poeni').innerHTML = onlineGuestIds.has(g.id) ? '<span class="text-emerald-600 font-bold"><span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>online</span>' : '<span class="text-slate-400">offline</span>';
+            document.getElementById('modal-prodavac-red').classList.remove('hidden');
+            return true;
+        }
+        function tackicaOnline(o) {
+            const g = guestInfoFromAd(o); if (!g) return '';
+            const on = onlineGuestIds.has(g.id);
+            return `<span data-guest-id="${g.id}" title="${g.name} je online" class="${on ? '' : 'hidden'} inline-block w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-200 animate-pulse mr-1 align-middle"></span>`;
+        }
+        function osvjeziZeleneTackice() {
+            document.querySelectorAll('[data-guest-id]').forEach(el => {
+                el.classList.toggle('hidden', !onlineGuestIds.has(el.dataset.guestId));
+            });
+        }
+        pokreniPrisustvoGosta();
+
+        // ===== NALOG (registracija/prijava) =====
+        let trenutniNalog = null; // { id, email, nadimak } ili null ako nije ulogovan
+
+        async function ucitajTrenutniNalog() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) { trenutniNalog = null; azurirajNalogUI(); return; }
+            const { data: profil } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+            trenutniNalog = { id: session.user.id, email: session.user.email, nadimak: profil ? profil.nadimak : session.user.email };
+            azurirajNalogUI();
+        }
+
+        function azurirajNalogUI() {
+            const dugme = document.getElementById('dugme-nalog');
+            if (!dugme) return;
+            if (trenutniNalog) {
+                dugme.innerHTML = `<span class="truncate max-w-[60px]">${trenutniNalog.nadimak}</span><span class="ml-1 bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-md text-[10px]" id="poeni-broj">…</span>`;
+                dugme.title = 'Tvoj nalog i poeni';
+                izracunajIPrikaziPoeneNaloga();
+            } else {
+                dugme.innerHTML = `<i class="fa-solid fa-user text-xs"></i>`;
+                dugme.title = 'Registruj se / Prijavi se';
+            }
+        }
+
+        async function izracunajIPrikaziPoeneNaloga() {
+            if (!trenutniNalog) return;
+            const { data, error } = await supabaseClient.rpc('poeni_korisnika', { korisnik_id: trenutniNalog.id });
+            const el = document.getElementById('poeni-broj');
+            if (el && !error) el.innerText = data;
+        }
+
+        function otvoriNalogModal() {
+            if (trenutniNalog) { otvoriProfilModal(); return; }
+            document.getElementById('modal-nalog').classList.remove('hidden');
+            prebaciNalogTab('prijava');
+        }
+        function zatvoriNalogModal() { document.getElementById('modal-nalog').classList.add('hidden'); }
+
+        function prebaciNalogTab(tab) {
+            document.getElementById('nalog-forma-prijava').classList.toggle('hidden', tab !== 'prijava');
+            document.getElementById('nalog-forma-registracija').classList.toggle('hidden', tab !== 'registracija');
+            document.getElementById('nalog-tab-prijava').classList.toggle('bg-white', tab === 'prijava');
+            document.getElementById('nalog-tab-prijava').classList.toggle('shadow-sm', tab === 'prijava');
+            document.getElementById('nalog-tab-registracija').classList.toggle('bg-white', tab === 'registracija');
+            document.getElementById('nalog-tab-registracija').classList.toggle('shadow-sm', tab === 'registracija');
+        }
+
+        async function posaljiRegistraciju() {
+            const nadimak = document.getElementById('reg-nadimak').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const lozinka = document.getElementById('reg-lozinka').value;
+            if (!nadimak) { toast('Unesite nadimak.', 'err'); return; }
+            if (!email || !lozinka || lozinka.length < 6) { toast('Email i lozinka (bar 6 karaktera) su obavezni.', 'err'); return; }
+
+            const { data, error } = await supabaseClient.auth.signUp({ email, password: lozinka });
+            if (error) { toast('Greška: ' + error.message, 'err'); return; }
+            if (!data.user) { toast('Nepoznata greška pri registraciji.', 'err'); return; }
+
+            await supabaseClient.from('profiles').insert([{ id: data.user.id, nadimak, email }]);
+
+            // Potvrdi email odmah preko servera (bez čekanja na klik u emailu),
+            // pa prijavi korisnika automatski.
+            try {
+                const potvrda = await fetch('/api/auto-confirm-user', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: data.user.id })
+                });
+                if (!potvrda.ok) console.warn('Vercel auto-confirm nije uspeo:', await potvrda.text());
+            } catch (eConfirm) { console.warn('auto-confirm nije dostupan:', eConfirm); }
+
+            const { error: eLogin } = await supabaseClient.auth.signInWithPassword({ email, password: lozinka });
+            if (eLogin) {
+                toast('Nalog napravljen! Prijavi se ručno.', 'ok');
+                zatvoriNalogModal();
+                prebaciNalogTab('prijava');
+                return;
+            }
+
+            toast('Nalog napravljen i prijavljen! 🎉', 'ok');
+            zatvoriNalogModal();
+            await ucitajTrenutniNalog();
+        }
+
+        async function posaljiPrijavu() {
+            const email = document.getElementById('prij-email').value.trim();
+            const lozinka = document.getElementById('prij-lozinka').value;
+            if (!email || !lozinka) { toast('Unesite email i lozinku.', 'err'); return; }
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password: lozinka });
+            if (error) { toast('Greška: ' + error.message, 'err'); return; }
+            toast('Dobrodošao/la nazad! 👋', 'ok');
+            zatvoriNalogModal();
+            await ucitajTrenutniNalog();
+        }
+
+        async function odjaviSe() {
+            await supabaseClient.auth.signOut();
+            trenutniNalog = null;
+            azurirajNalogUI();
+            zatvoriProfilModal();
+            toast('Odjavljeni ste.', 'ok');
+        }
+
+        function otvoriProfilModal() {
+            document.getElementById('profil-nadimak').innerText = trenutniNalog.nadimak;
+            document.getElementById('profil-email').innerText = trenutniNalog.email;
+            document.getElementById('modal-profil').classList.remove('hidden');
+            izracunajIPrikaziPoeneProfil();
+        }
+        function zatvoriProfilModal() { document.getElementById('modal-profil').classList.add('hidden'); }
+        async function izracunajIPrikaziPoeneProfil() {
+            const { data, error } = await supabaseClient.rpc('poeni_korisnika', { korisnik_id: trenutniNalog.id });
+            if (!error) {
+                document.getElementById('profil-poeni').innerText = data;
+                document.getElementById('profil-oglasa').innerText = Math.floor(data / 10);
+            }
+        }
+
+        function otvoriPravilaModal() { document.getElementById('modal-pravila').classList.remove('hidden'); }
+        function zatvoriPravilaModal() { document.getElementById('modal-pravila').classList.add('hidden'); }
+        let trenutniOglasId = null;
+        let trenutniChatKanal = null;
+        let prikazGeneracija = 0;
+        let pretragaTimeout = null;
+        let aktivniTab = 'oglasi';
+        let zajednicaCache = {};
+        let zajednicaFilter = 'sve';
+
+        const KATEGORIJE = [
+            { id: 'sve', ikona: 'fa-border-all', label: 'Sve' },
+            { id: 'poklanjam', ikona: 'fa-gift', label: 'Pokloni' },
+            { id: 'do20', ikona: 'fa-tag', label: 'Do 20 €' },
+            { id: 'od20do50', ikona: 'fa-tags', label: '20–50 €' },
+            { id: 'preko50', ikona: 'fa-gem', label: 'Preko 50 €' },
+            { id: 'omiljeno', ikona: 'fa-heart', label: 'Omiljeni' }
+        ];
+
+        function toast(poruka, tip = 'ok') {
+            const kon = document.getElementById('toast-kontejner');
+            const boje = { ok: 'border-emerald-200 bg-emerald-50 text-emerald-800', err: 'border-rose-200 bg-rose-50 text-rose-800', info: 'border-slate-200 bg-white text-slate-800' };
+            const ikone = { ok: 'fa-circle-check text-emerald-600', err: 'fa-circle-exclamation text-rose-600', info: 'fa-circle-info text-sky-600' };
+            const el = document.createElement('div');
+            el.className = `toast-item pointer-events-auto border ${boje[tip]} px-4 py-2.5 rounded-2xl text-xs font-bold shadow-lg flex items-center space-x-2 cursor-pointer`;
+            el.innerHTML = `<i class="fa-solid ${ikone[tip]}"></i><span>${poruka}</span>`;
+            const ukloni = () => { el.style.transition = 'opacity .3s, transform .3s'; el.style.opacity = '0'; el.style.transform = 'translateY(8px)'; setTimeout(() => el.remove(), 300); };
+            // Klik na poruku je odmah zatvara (npr. kad je pročitaš i želiš dalje da radiš).
+            el.onclick = ukloni;
+            kon.appendChild(el);
+            // Greške (err) ostaju duže na ekranu jer su obično duže i važnije
+            // za pročitati (npr. tačan razlog zašto slika nije sačuvana).
+            const trajanje = tip === 'err' ? 12000 : 2600;
+            setTimeout(ukloni, trajanje);
+        }
+
+        function parsirajCijenu(cena) {
+            const m = String(cena || '').replace(',', '.').match(/\d+(\.\d+)?/);
+            return m ? parseFloat(m[0]) : 0;
+        }
+
+        function vrijemeOdObjave(createdAt) {
+            if (!createdAt) return '';
+            let datum = new Date(createdAt);
+            if (isNaN(datum)) return '';
+            let diffMs = new Date() - datum;
+            if (diffMs < 0) diffMs = 0;
+            let min = Math.floor(diffMs / 60000);
+            if (min < 1) return 'upravo sad';
+            if (min < 60) return 'prije ' + min + ' min';
+            let h = Math.floor(min / 60);
+            if (h < 24) return 'prije ' + h + ' h';
+            let d = Math.floor(h / 24);
+            if (d === 1) return 'juče';
+            if (d < 7) return 'prije ' + d + ' dana';
+            return 'prije ' + Math.floor(d / 30) + ' mj.';
+        }
+
+        function jeNovo(createdAt) {
+            if (!createdAt) return false;
+            return (new Date() - new Date(createdAt)) < 48 * 60 * 60 * 1000;
+        }
+
+        function sacuvajOmiljene() {
+            localStorage.setItem('kus_omiljeni', JSON.stringify([...omiljeni]));
+        }
+
+        async function zabeleziPosetu() {
+            try {
+                let visitorId = localStorage.getItem('kus_visitor_id');
+                if (!visitorId) { visitorId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()); localStorage.setItem('kus_visitor_id', visitorId); }
+                await fetch('/api/analytics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visitorId, path: location.pathname, referrer: document.referrer }) });
+            } catch (e) { console.warn('Analitika nije dostupna:', e); }
+        }
+        async function ucitajAnalitiku() {
+            const status = document.getElementById('analytics-status');
+            try {
+                const response = await fetch('/api/analytics');
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Greška');
+                document.getElementById('analytics-posjete').innerText = data.visits;
+                document.getElementById('analytics-jedinstveni').innerText = data.uniqueVisitors;
+                document.getElementById('analytics-danas').innerText = data.today;
+                status.innerText = 'Ažurirano upravo sada.';
+            } catch (e) { status.innerText = 'Analitika čeka podešavanje SQL tabele i Vercel varijabli.'; }
+        }
+        window.onload = async function() {
+            zabeleziPosetu();
+            await proveriPostojecuSesiju();
+            await ucitajTrenutniNalog();
+            const sacGrad = localStorage.getItem('kus_grad');
+            const sacKvart = localStorage.getItem('kus_kvart');
+            if (sacGrad) document.getElementById('select-grad').value = sacGrad;
+            azurirajKvartoveSelect();
+            if (sacKvart) document.getElementById('select-kvart').value = sacKvart;
+            azurirajKvartoveObjave();
+            azurirajLokacijuUI();
+            postaviKategorijeUI();
+            postaviRadijusUI();
+            postaviPrikazUI();
+            promeniGlavniTab('oglasi');
+            promeniZajednicaFilter('sve');
+            await prikaziOglasePremaFilteru();
+            pokreniBrojacPoruka();
+            azurirajStatusMreze();
+            window.addEventListener('online', azurirajStatusMreze);
+            window.addEventListener('offline', azurirajStatusMreze);
+
+            // Ako je link podijeljen (Viber/Instagram/WhatsApp) i sadrži
+            // ?oglas=<id>, direktno otvori taj oglas čim se aplikacija učita.
+            const idIzLinka = new URLSearchParams(location.search).get('oglas');
+            if (idIzLinka && oglasiCache[idIzLinka] !== undefined) {
+                otvoriOglas(Number(idIzLinka));
+            } else if (idIzLinka) {
+                // Oglas nije u trenutnom filteru/keš-u (npr. drugi grad) —
+                // učitaj ga posebno pa otvori.
+                const { data } = await supabaseClient.from('oglasi').select('*').eq('id', idIzLinka).maybeSingle();
+                if (data) {
+                    oglasiCache[data.id] = { ...data, distKm: data.dist_km, telefon: data.telefon || 'Chat podrška' };
+                    oglasiVrijemeCache[data.id] = data.created_at;
+                    otvoriOglas(data.id);
+                }
+            }
+
+            // Automatsko osvježavanje liste oglasa — radi za SVE korisnike
+            // (admin i obični posjetioci), ne samo dok si u panelu.
+            // Ne osvježava dok je otvoren neki modal (detalji oglasa, objava,
+            // prijava) da ne prekine korisnika usred rada.
+            setInterval(() => {
+                const otvorenModal = document.querySelector('.fixed:not(.hidden)[id^="modal-"]');
+                if (!otvorenModal && document.visibilityState === 'visible') {
+                    prikaziOglasePremaFilteru();
+                }
+            }, 45000);
+        };
+
+        function azurirajStatusMreze() {
+            const el = document.getElementById('status-mreze');
+            if (navigator.onLine) {
+                el.className = 'bg-emerald-50 border-b border-emerald-100 px-3 py-1 text-[10px] font-bold text-emerald-700 text-center flex-shrink-0';
+                el.innerHTML = '<i class="fa-solid fa-wifi mr-1"></i> Povezani ste na mrežu';
+            } else {
+                el.className = 'bg-rose-50 border-b border-rose-100 px-3 py-1 text-[10px] font-bold text-rose-700 text-center flex-shrink-0';
+                el.innerHTML = '<i class="fa-solid fa-wifi-slash mr-1"></i> Nema interneta';
+            }
+        }
+
+        function azurirajKvartoveSelect() {
+            let grad = document.getElementById('select-grad').value;
+            let kvartSelect = document.getElementById('select-kvart');
+            let kvartovi = kvartoviGrada[grad] || ["Centar"];
+            kvartSelect.innerHTML = kvartovi.map(k => `<option value="${k}">${k}</option>`).join('');
+        }
+
+        function azurirajKvartoveObjave() {
+            let grad = document.getElementById('objava-select-grad').value;
+            let kvartSelect = document.getElementById('objava-select-kvart');
+            let kvartovi = kvartoviGrada[grad] || ["Centar"];
+            kvartSelect.innerHTML = kvartovi.map(k => `<option value="${k}">${k}</option>`).join('');
+        }
+
+        function azurirajLokacijuUI() {
+            let grad = document.getElementById('select-grad').value;
+            let kvart = document.getElementById('select-kvart').value;
+            document.getElementById('naslov-grada').innerText = `${grad} (${kvart})`;
+            document.getElementById('kvart-label').innerHTML = `<i class="fa-solid fa-location-dot mr-1"></i> ${kvart}`;
+            document.getElementById('panel-lokacija').innerHTML = `<i class="fa-solid fa-location-dot text-brand-500 mr-1"></i> ${grad}, ${kvart}`;
+            localStorage.setItem('kus_grad', grad);
+            localStorage.setItem('kus_kvart', kvart);
+        }
+
+        async function azurirajLokaciju(azurirajKvartove) {
+            if (azurirajKvartove) azurirajKvartoveSelect();
+            azurirajLokacijuUI();
+            // Dodatna zaštita: obriši eventualnu "zaglavljenu" pretragu (npr.
+            // ako browser autofill ubaci email umjesto teksta pretrage) pri
+            // svakoj promjeni grada, da nikad ne blokira sve rezultate tiho.
+            document.getElementById('input-pretraga').value = '';
+            pretraga = '';
+            await prikaziOglasePremaFilteru();
+        }
+
+        function postaviKategorijeUI() {
+            const traka = document.getElementById('traka-kategorija');
+            traka.innerHTML = KATEGORIJE.map(k => `
+                <button onclick="postaviKategoriju('${k.id}')" data-kat="${k.id}"
+                    class="chip flex-shrink-0 flex items-center space-x-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-sm ${k.id === kategorija ? 'chip-active' : ''}">
+                    <i class="fa-solid ${k.ikona} text-[10px]"></i><span>${k.label}</span>
+                    ${k.id === 'omiljeno' && omiljeni.size > 0 ? `<span class="bg-rose-500 text-white text-[9px] font-bold px-1.5 rounded-full">${omiljeni.size}</span>` : ''}
+                </button>`).join('');
+        }
+
+        function postaviKategoriju(kat) {
+            kategorija = kat;
+            postaviKategorijeUI();
+            prikaziOglasePremaFilteru();
+        }
+
+        function pretragaPromjena(vrijednost) {
+            document.getElementById('dugme-ocisti-pretragu').classList.toggle('hidden', !vrijednost);
+            clearTimeout(pretragaTimeout);
+            pretragaTimeout = setTimeout(() => { pretraga = vrijednost.trim().toLowerCase(); prikaziOglasePremaFilteru(); }, 220);
+        }
+
+        function ocistiPretragu() {
+            document.getElementById('input-pretraga').value = '';
+            pretraga = '';
+            document.getElementById('dugme-ocisti-pretragu').classList.add('hidden');
+            prikaziOglasePremaFilteru();
+        }
+
+        function promeniSortiranje(v) { sortiranje = v; prikaziOglasePremaFilteru(); }
+
+        function postaviRadijusUI() {
+            ['1', '5', 'sve'].forEach(r => {
+                document.getElementById('btn-rad-' + r).className = 'flex-1 py-1.5 text-xs font-bold rounded-lg text-slate-600 transition';
+            });
+            const aktivni = izabraniRadijus === '1km' ? '1' : izabraniRadijus === '5km' ? '5' : 'sve';
+            document.getElementById('btn-rad-' + aktivni).className = 'flex-1 py-1.5 text-xs font-bold rounded-lg bg-white text-slate-900 shadow-sm transition';
+            document.getElementById('radijus-tekst').innerText = izabraniRadijus === '1km' ? 'Do 1 km' : izabraniRadijus === '5km' ? 'Do 5 km' : 'Cijeli grad';
+        }
+
+        async function postaviRadijus(rad) {
+            izabraniRadijus = rad;
+            localStorage.setItem('kus_radijus', rad);
+            postaviRadijusUI();
+            await prikaziOglasePremaFilteru();
+        }
+
+        function postaviPrikazUI() {
+            const aktivan = 'flex-1 py-2 text-xs font-bold rounded-lg bg-white text-slate-900 shadow transition flex items-center justify-center space-x-1.5';
+            const neaktivan = 'flex-1 py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-slate-900 transition flex items-center justify-center space-x-1.5';
+            document.getElementById('prikaz-btn-mapa').className = trenutniPrikaz === 'mapa' ? aktivan : neaktivan;
+            document.getElementById('prikaz-btn-grid').className = trenutniPrikaz === 'grid' ? aktivan : neaktivan;
+            document.getElementById('kontejner-mapa').classList.toggle('hidden', trenutniPrikaz !== 'mapa');
+            document.getElementById('kontejner-grid').classList.toggle('hidden', trenutniPrikaz !== 'grid');
+        }
+
+        async function promeniPrikaz(tip) {
+            trenutniPrikaz = tip;
+            localStorage.setItem('kus_prikaz', tip);
+            postaviPrikazUI();
+            await prikaziOglasePremaFilteru();
+        }
+
+        function filtrirajOglase(bazaOglasa) {
+            let grad = document.getElementById('select-grad').value;
+            let rezultat = bazaOglasa.filter(o => {
+                if (!o.odobreno) return false;
+                if (o.grad !== grad) return false;
+                if (izabraniRadijus === '1km' && o.distKm > 1.0) return false;
+                if (izabraniRadijus === '5km' && o.distKm > 5.0) return false;
+                if (pretraga && !String(o.naziv).toLowerCase().includes(pretraga)) return false;
+                if (kategorija === 'omiljeno' && !omiljeni.has(o.id)) return false;
+                if (kategorija === 'poklanjam' && !String(o.cena).includes('Poklanjam')) return false;
+                if (kategorija === 'do20' && (String(o.cena).includes('Poklanjam') || parsirajCijenu(o.cena) >= 20)) return false;
+                if (kategorija === 'od20do50') { const c = parsirajCijenu(o.cena); if (c < 20 || c > 50) return false; }
+                if (kategorija === 'preko50' && parsirajCijenu(o.cena) <= 50) return false;
+                return true;
+            });
+            if (sortiranje === 'cijena-rast') rezultat.sort((a, b) => parsirajCijenu(a.cena) - parsirajCijenu(b.cena));
+            else if (sortiranje === 'cijena-pad') rezultat.sort((a, b) => parsirajCijenu(b.cena) - parsirajCijenu(a.cena));
+            else if (sortiranje === 'naziv') rezultat.sort((a, b) => String(a.naziv).localeCompare(String(b.naziv), 'sr'));
+            return rezultat;
+        }
+
+        async function prikaziOglasePremaFilteru() {
+            // Ako korisnik brzo klikne (npr. promijeni prikaz/grad) dok se
+            // prethodni poziv ove funkcije još učitava, stariji poziv NE
+            // smije prepisati rezultat novijeg kad se konačno završi — to je
+            // izazivalo prazan prikaz na mapi dok se ne osvježi.
+            const mojaGeneracija = ++prikazGeneracija;
+
+            let listaInner = document.getElementById('lista-oglasi-inner');
+            let mapaInner = document.getElementById('mapa-pinovi-inner');
+
+            listaInner.className = "grid grid-cols-2 gap-3";
+            listaInner.innerHTML = Array(4).fill(`
+                <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="skeleton h-28 w-full"></div>
+                    <div class="p-3 space-y-2"><div class="skeleton h-3 rounded w-3/4"></div><div class="skeleton h-2 rounded w-1/2"></div></div>
+                </div>`).join('');
+            mapaInner.innerHTML = '<div class="absolute inset-0 flex items-center justify-center z-10"><i class="fa-solid fa-spinner text-sky-600 text-xl spin"></i></div>';
+
+            let bazaOglasa = await DB.dajSve();
+
+            if (mojaGeneracija !== prikazGeneracija) return; // stigao je noviji poziv u međuvremenu, prekini
+
+            bazaOglasa.forEach(o => { oglasiCache[o.id] = o; oglasiVrijemeCache[o.id] = o.created_at; });
+            let filtrirani = filtrirajOglase(bazaOglasa);
+
+            document.getElementById('stat-broj-oglasa').innerText = filtrirani.length;
+            const saCijenom = filtrirani.filter(o => !String(o.cena).includes('Poklanjam') && parsirajCijenu(o.cena) > 0);
+            document.getElementById('stat-prosjecna').innerText = saCijenom.length
+                ? Math.round(saCijenom.reduce((s, o) => s + parsirajCijenu(o.cena), 0) / saCijenom.length) + ' €'
+                : '—';
+
+            listaInner.innerHTML = '';
+            mapaInner.innerHTML = '';
+
+            if (filtrirani.length === 0) {
+                listaInner.className = "block";
+                const gradZaPoruku = document.getElementById('select-grad').value;
+                const porukaPrazno = izabraniRadijus === '1km'
+                    ? `Nema oglasa u krugu od 1 km u <b>${gradZaPoruku}</b>.`
+                    : izabraniRadijus === '5km'
+                        ? `Nema oglasa u krugu od 5 km u <b>${gradZaPoruku}</b>.`
+                        : `Nema oglasa za izabrane filtere u <b>${gradZaPoruku}</b>.`;
+                const dugmeSiriRezultat = izabraniRadijus !== 'sve'
+                    ? `<button onclick="postaviRadijus('sve')" class="bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">Prikaži oglase iz cijelog grada</button>`
+                    : `<button onclick="otvoriObjavu()" class="bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">Postavi prvi oglas 🚀</button>`;
+                listaInner.innerHTML = `
+                    <div class="bg-white border border-dashed border-slate-200 p-6 rounded-2xl text-center space-y-2.5 shadow-sm">
+                        <i class="fa-solid fa-box-open text-2xl text-slate-300"></i>
+                        <p class="text-slate-600 text-xs font-bold">${porukaPrazno}</p>
+                        ${dugmeSiriRezultat}
+                    </div>`;
+                mapaInner.innerHTML = `<div class="absolute inset-0 flex items-center justify-center text-xs text-slate-500 font-bold z-10 bg-white/80 p-4 text-center backdrop-blur-sm"><span><i class="fa-solid fa-map-pin text-sky-600 text-lg block mb-1"></i>Nema pinova za ovaj filter.</span></div>`;
+                return;
+            }
+
+            listaInner.className = "grid grid-cols-2 gap-3";
+            let zauzetePozicije = [];
+
+            filtrirani.forEach((o, index) => {
+                const jeOmiljen = omiljeni.has(o.id);
+                const badgeBoja = String(o.cena).includes('Poklanjam')
+                    ? 'text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-[10px]'
+                    : 'text-brand-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px]';
+
+                listaInner.innerHTML += `
+                    <div onclick="otvoriOglas(${o.id})" style="animation-delay:${index * 40}ms"
+                        class="anim-fade-up bg-white border border-slate-100 hover:border-brand-300 rounded-2xl overflow-hidden shadow-sm cursor-pointer flex flex-col justify-between group relative transition">
+                        <div>
+                            <div class="relative h-28 w-full overflow-hidden bg-slate-100">
+                                <img src="${o.img || FALLBACK_SLIKA}" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_SLIKA}'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" alt="Slika">
+                                ${jeNovo(o.created_at) ? '<span class="absolute bottom-2 left-2 bg-brand-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-sm">NOVO</span>' : ''}
+                                <button onclick="event.stopPropagation();toggleOmiljeni(${o.id})" class="absolute top-2 left-2 w-7 h-7 rounded-full bg-white/90 border border-slate-100 flex items-center justify-center transition hover:scale-110 shadow-sm ${jeOmiljen ? 'text-rose-500' : 'text-slate-400'}">
+                                    <i class="${jeOmiljen ? 'fa-solid' : 'fa-regular'} fa-heart text-xs"></i>
+                                </button>
+                                <div class="absolute top-2 right-2"><span class="${badgeBoja} font-extrabold shadow-sm">${o.cena}</span></div>
+                            </div>
+                            <div class="p-3 space-y-1">
+                                <h4 class="font-bold text-xs text-slate-900 line-clamp-1">${tackicaOnline(o)}${o.naziv}</h4>
+                                <p class="text-[10px] text-slate-500 font-medium truncate"><i class="fa-solid fa-location-dot text-brand-500 mr-0.5"></i> ${o.kvart} · ${vrijemeOdObjave(o.created_at)}</p>
+                            </div>
+                        </div>
+                        <div class="px-3 pb-3 pt-0 flex justify-between items-center text-[10px] font-bold text-slate-400">
+                            <span><i class="fa-solid fa-comments text-brand-500 mr-1"></i>Čet</span>
+                            <span class="text-brand-600">Otvori ➔</span>
+                        </div>
+                    </div>`;
+
+                let tVal = parseFloat(o.top) || (20 + (index * 14) % 60);
+                let lVal = parseFloat(o.left) || (15 + (index * 20) % 65);
+                for (let pokusaj = 0; pokusaj < 6; pokusaj++) {
+                    let sudar = zauzetePozicije.some(p => Math.abs(p.t - tVal) < 12 && Math.abs(p.l - lVal) < 15);
+                    if (sudar) { tVal = (tVal + 14) % 70 + 10; lVal = (lVal + 18) % 75 + 10; } else break;
+                }
+                zauzetePozicije.push({ t: tVal, l: lVal });
+
+                mapaInner.innerHTML += `
+                    <div onclick="otvoriOglas(${o.id})" style="top:${tVal}%; left:${lVal}%; animation-delay:${index * 60}ms"
+                        class="pin-pop absolute bg-white/95 border border-sky-300 text-slate-900 text-xs px-3 py-2 rounded-2xl shadow-lg cursor-pointer hover:scale-105 transition flex items-center space-x-2 z-20 backdrop-blur-sm">
+                        <span class="w-2.5 h-2.5 rounded-full bg-sky-500 animate-ping absolute -top-1 -right-1"></span>
+                        <div class="w-2 h-2 rounded-full bg-sky-600 flex-shrink-0"></div>
+                        <div>
+                            <p class="font-extrabold text-sky-900 text-xs">${o.cena}</p>
+                            <p class="text-[9px] text-slate-500 font-semibold">${o.kvart}</p>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        async function osvjeziPodatke() {
+            const ikona = document.getElementById('ikonica-refresh');
+            ikona.classList.add('spin');
+            await prikaziOglasePremaFilteru();
+            pokreniBrojacPoruka();
+            ikona.classList.remove('spin');
+            toast('Podaci osvježeni', 'info');
+        }
+
+        function toggleOmiljeni(id) {
+            if (omiljeni.has(id)) { omiljeni.delete(id); toast('Uklonjeno iz omiljenih', 'info'); }
+            else { omiljeni.add(id); toast('Dodano u omiljene ❤️', 'ok'); }
+            sacuvajOmiljene();
+            postaviKategorijeUI();
+            prikaziOglasePremaFilteru();
+            if (trenutniOglasId === id) azurirajFavDugme();
+        }
+
+        function toggleOmiljeniTrenutni() { if (trenutniOglasId) toggleOmiljeni(trenutniOglasId); }
+
+        function azurirajFavDugme() {
+            const ikona = document.getElementById('modal-fav-ikona');
+            const jeOmiljen = omiljeni.has(trenutniOglasId);
+            ikona.className = `${jeOmiljen ? 'fa-solid' : 'fa-regular'} fa-heart text-xs ${jeOmiljen ? 'text-rose-500' : ''}`;
+        }
+
+        function vratiNaGlavnu() {
+            promeniTab('home');
+            document.getElementById('select-grad').value = "Podgorica";
+            azurirajKvartoveSelect();
+            document.getElementById('select-kvart').value = "Blok 5";
+            azurirajLokacijuUI();
+            postaviRadijus('sve');
+            ocistiPretragu();
+            postaviKategoriju('sve');
+            document.getElementById('glavni-scroll').scrollTop = 0;
+        }
+
+        function promeniTab(tab) {
+            ['home', 'panel'].forEach(t => document.getElementById('tab-' + t).classList.add('hidden'));
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+            if (tab === 'panel') {
+                ucitajAdminPanelOglase();
+                ucitajTemuPaket();
+                ucitajSveRazgovore();
+                pokreniBrojacPoruka();
+                ucitajAnalitiku();
+            }
+        }
+
+        function proveriPristupPanelu() {
+            if (panelOtklucan) { promeniTab('panel'); }
+            else {
+                document.getElementById('modal-sifra').classList.remove('hidden');
+                document.getElementById('input-admin-email').value = '';
+                document.getElementById('input-sifra').value = '';
+                document.getElementById('input-admin-email').focus();
+            }
+        }
+        function zatvoriSifru() { document.getElementById('modal-sifra').classList.add('hidden'); }
+
+        async function potvrdiSifru() {
+            let email = document.getElementById('input-admin-email').value.trim();
+            let lozinka = document.getElementById('input-sifra').value;
+            if (!email || !lozinka) { toast('Unesite email i lozinku.', 'err'); return; }
+            let dugme = document.getElementById('dugme-potvrdi-prijavu');
+            dugme.disabled = true; dugme.innerText = 'Prijavljujem...';
+            const { data: loginData, error } = await supabaseClient.auth.signInWithPassword({ email, password: lozinka });
+            dugme.disabled = false; dugme.innerText = 'Prijavi se';
+            if (error) { toast('Prijava neuspešna: ' + error.message, 'err'); return; }
+            adminAccessToken = loginData.session?.access_token || null;
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            if (!sessionData.session && !adminAccessToken) { toast('Prijava nije uspjela. Pokušaj ponovo.', 'err'); return; }
+            panelOtklucan = true;
+            zatvoriSifru();
+            promeniTab('panel');
+            toast('Dobrodošao nazad! 👋', 'ok');
+        }
+
+        async function odjaviSeIzPanela() {
+            await supabaseClient.auth.signOut();
+            adminAccessToken = null;
+            panelOtklucan = false;
+            promeniTab('home');
+            toast('Odjavljeni ste.', 'info');
+        }
+
+        async function authHeaders(forceRefresh = false) {
+            let { data } = await supabaseClient.auth.getSession();
+            const expiresSoon = data.session?.expires_at && data.session.expires_at * 1000 < Date.now() + 60_000;
+            if (forceRefresh || !data.session || expiresSoon) {
+                const refreshed = await supabaseClient.auth.refreshSession();
+                if (refreshed.data?.session) data = refreshed.data;
+            }
+            const accessToken = data.session?.access_token || adminAccessToken;
+            if (data.session?.access_token) adminAccessToken = data.session.access_token;
+            return accessToken ? { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } : null;
+        }
+
+        async function objaviMetaAutomatski(newAdIds = [], notify = false) {
+            const headers = await authHeaders();
+            if (!headers || !newAdIds.length) return;
+            try {
+                let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ new_ad_ids: newAdIds }) });
+                if (response.status === 401) {
+                    const refreshed = await authHeaders(true);
+                    if (refreshed) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshed, body: JSON.stringify({ new_ad_ids: newAdIds }) });
+                }
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Automatska objava nije uspjela.');
+                if (body.published) toast('Paket od 3 oglasa i 1 Temu proizvoda objavljen je na Facebooku i Instagramu.', 'ok');
+            } catch (error) {
+                console.error('[Komsiluk Meta auto-publish]', error);
+                if (notify) toast('Oglas je sačuvan, ali objava na mrežama nije uspjela: ' + error.message, 'err');
+            }
+        }
+
+        async function ucitajTemuPaket() {
+            const status = document.getElementById('temu-paket-status');
+            if (!status) return;
+            const headers = await authHeaders();
+            if (!headers) { status.innerText = 'Prijava je potrebna za Temu paket.'; return; }
+            try {
+                const response = await fetch('/api/temu-products', { headers });
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Greška pri učitavanju.');
+                (body.products || []).slice(0, 3).forEach((p, i) => {
+                    const input = document.getElementById(`temu-link-${i + 1}`);
+                    if (input) input.value = p.affiliate_url || '';
+                });
+                status.innerText = body.products?.length ? `${body.products.length} Temu proizvoda je učitano.` : 'Paket još nije učitan.';
+            } catch (error) { status.innerText = error.message; }
+        }
+
+        async function sacuvajTemuPaket() {
+            const links = [1, 2, 3].map(i => document.getElementById(`temu-link-${i}`).value.trim());
+            if (links.some(link => !link)) { toast('Unesi sva tri Temu linka.', 'err'); return; }
+            const headers = await authHeaders();
+            if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
+            const status = document.getElementById('temu-paket-status');
+            status.innerText = 'Učitavam podatke sa Temua...';
+            try {
+                let response = await fetch('/api/temu-products', { method: 'POST', headers, body: JSON.stringify({ links }) });
+                if (response.status === 401) {
+                    const refreshedHeaders = await authHeaders(true);
+                    if (refreshedHeaders) response = await fetch('/api/temu-products', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ links }) });
+                }
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Paket nije sačuvan.');
+                status.innerText = 'Paket je sačuvan i spreman za objavu.';
+                toast('Tri Temu proizvoda su sačuvana.', 'ok');
+            } catch (error) { status.innerText = error.message; toast(error.message, 'err'); }
+        }
+
+        async function pripremiMetaObjavu() {
+            const headers = await authHeaders();
+            if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
+            const [adsResponse, temuResponse] = await Promise.all([
+                supabaseClient.from('oglasi').select('id,naziv,grad,kvart,cena,img,created_at').eq('odobreno', true).order('created_at', { ascending: false }).limit(3),
+                fetch('/api/temu-products', { headers }).then(r => r.json())
+            ]);
+            const ads = adsResponse.data || [];
+            const temu = temuResponse.products?.[0];
+            if (ads.length < 3) { toast('Nema tri odobrena lokalna oglasa.', 'err'); return; }
+            if (!temu) { toast('Sačuvaj tri Temu linka prije pregleda.', 'err'); return; }
+            const opis = `${ads.map(o => `${o.naziv} (${o.grad})`).join(' · ')} · ${temu.naziv} (Temu)`;
+            toast('Spremno za objavu: ' + opis, 'ok');
+            console.info('[Komsiluk Meta preview]', { localAds: ads, temu });
+        }
+
+        async function objaviMetaSada(repost = false) {
+            const headers = await authHeaders();
+            if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
+            const button = document.getElementById('meta-publish-now');
+            const status = document.getElementById('temu-paket-status');
+            const original = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Objavljujem...';
+            status.innerText = 'Šaljem kolaž na Facebook i Instagram...';
+            try {
+                let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ manual: true, repost }) });
+                if (response.status === 401) {
+                    const refreshedHeaders = await authHeaders(true);
+                    if (refreshedHeaders) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ manual: true, repost }) });
+                }
+                if (response.status === 401) {
+                    await supabaseClient.auth.signOut();
+                    adminAccessToken = null;
+                    panelOtklucan = false;
+                    throw new Error('Sesija je istekla. Prijavi se ponovo u kontrolnom panelu.');
+                }
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.error || 'Objava nije uspjela.');
+                if (body.published) {
+                    status.innerText = 'Objava je poslata na Facebook i Instagram.';
+                    toast('Objava je poslata na Facebook i Instagram.', 'ok');
+                } else {
+                    const message = body.message || 'Objava je preskočena.';
+                    status.innerText = message;
+                    toast(message, body.skipped ? 'info' : 'err');
+                }
+            } catch (error) {
+                status.innerText = error.message;
+                toast(error.message, 'err');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = original;
+            }
+        }
+
+        async function proveriPostojecuSesiju() {
+            const { data } = await supabaseClient.auth.getSession();
+            panelOtklucan = !!data.session;
+        }
+
+        function togglePoklanjam() {
+            jePoklanjam = !jePoklanjam;
+            let chk = document.getElementById('poklanjam-checkbox');
+            let icon = chk.querySelector('i');
+            let inputCena = document.getElementById('input-cena-oglasa');
+            if (jePoklanjam) {
+                chk.classList.add('bg-brand-500', 'border-brand-500');
+                icon.classList.remove('hidden');
+                inputCena.value = 'Poklanjam 🎁'; inputCena.disabled = true; inputCena.classList.add('opacity-50');
+            } else {
+                chk.classList.remove('bg-brand-500', 'border-brand-500');
+                icon.classList.add('hidden');
+                inputCena.value = ''; inputCena.disabled = false; inputCena.classList.remove('opacity-50');
+            }
+        }
+
+        function ucitajPregledSlike(event) {
+            let fajl = event.target.files[0];
+            let pregled = document.getElementById('pregled-slike-oglasa');
+            if (!fajl) { pregled.classList.add('hidden'); pregled.src = ''; return; }
+            pregled.src = URL.createObjectURL(fajl);
+            pregled.classList.remove('hidden');
+        }
+
+        async function otpremiSlikuUStorage(fajl) {
+            let ekstenzija = fajl.name.split('.').pop();
+            let putanja = `oglas_${Date.now()}_${Math.floor(Math.random() * 100000)}.${ekstenzija}`;
+            const { error } = await supabaseClient.storage.from('oglasi-slike').upload(putanja, fajl, { cacheControl: '3600', upsert: false });
+            if (error) { console.error(error); return null; }
+            const { data: javniUrl } = supabaseClient.storage.from('oglasi-slike').getPublicUrl(putanja);
+            return javniUrl.publicUrl;
+        }
+
+        async function turboUveziOglas() {
+            let tekst = document.getElementById('turbo-tekst').value.trim();
+            let grad = document.getElementById('turbo-grad').value.trim();
+            let cena = document.getElementById('turbo-cena').value.trim();
+            let izvorniLink = document.getElementById('turbo-izvorni-link').value.trim();
+            let slika = document.getElementById('turbo-slika').value.trim();
+            if (!tekst || !grad || !cena || !slika) { toast('Popuni sva polja!', 'err'); return; }
+
+            // FB linkovi za slike vremenom isteknu (potpisani token), pa se slika
+            // ovdje SKINE sa servera i trajno sacuva u nas 'oglasi-slike' bucket
+            // (import-slika Edge Function), umjesto da se direktan FB link upise u bazu.
+            toast('Skidam sliku...', 'ok');
+            let trajnaSlika = slika;
+            try {
+                const { data: importData, error: importError } = await supabaseClient.functions.invoke('import-slika', {
+                    body: { url: slika }
+                });
+                if (importError || !importData || !importData.url) {
+                    // supabase-js ne prosljeđuje automatski pravi tekst greške iz
+                    // tijela odgovora — ovdje ga ručno izvlačimo iz importError.context
+                    // (Response objekat) da vidimo STVARAN razlog, ne generički tekst.
+                    let pravaGreska = importData?.error || '';
+                    if (!pravaGreska && importError?.context && typeof importError.context.json === 'function') {
+                        try {
+                            const tijelo = await importError.context.clone().json();
+                            pravaGreska = tijelo?.error || JSON.stringify(tijelo);
+                        } catch (e2) {
+                            try { pravaGreska = await importError.context.clone().text(); } catch (e3) { /* ne uspije */ }
+                        }
+                    }
+                    pravaGreska = pravaGreska || importError?.message || 'nepoznat razlog';
+                    toast('Slika se nije mogla trajno sačuvati (' + pravaGreska + '), koristim FB link (može isteći).', 'err');
+                } else {
+                    trajnaSlika = importData.url;
+                }
+            } catch (e) {
+                toast('Greška pri čuvanju slike (' + (e?.message || e) + '), koristim FB link (može isteći).', 'err');
+            }
+
+            let rezultat = await DB.dodajOglas({
+                grad: grad, kvart: 'Centar', dist_km: 0.2, naziv: tekst, cena: cena,
+                telefon: 'Chat', img: trajnaSlika, odobreno: true, izvorni_link: izvorniLink
+            });
+            if (!rezultat.ok) { toast('Greška: ' + rezultat.msg, 'err'); return; }
+            toast('Uspješno ubačeno 🚀', 'ok');
+            ['turbo-tekst', 'turbo-grad', 'turbo-cena', 'turbo-izvorni-link', 'turbo-slika'].forEach(id => document.getElementById(id).value = '');
+            await ucitajAdminPanelOglase();
+            await prikaziOglasePremaFilteru();
+            await objaviMetaAutomatski([rezultat.id], true);
+        }
+
+        async function objaviNoviOglas() {
+            // Bez registracije: dovoljno je samo ime. Ako je korisnik ipak prijavljen, koristi se nalog.
+            const imeObjavljivaca = document.getElementById('input-ime-oglasa').value.trim();
+            if (!imeObjavljivaca) { toast('Unesite svoje ime.', 'err'); document.getElementById('input-ime-oglasa').focus(); return; }
+
+            if (trenutniNalog) {
+                const { data: brojDanas, error: eBroj } = await supabaseClient.rpc('oglasa_danas', { korisnik_id: trenutniNalog.id });
+                if (!eBroj && brojDanas >= 5) {
+                    toast('Dostigao/la si dnevni limit od 5 oglasa. Pokušaj sjutra.', 'err');
+                    return;
+                }
+            }
+
+            let naziv = document.getElementById('input-naziv-oglasa').value.trim();
+            let cena = document.getElementById('input-cena-oglasa').value.trim();
+            let telefon = document.getElementById('input-telefon-oglasa').value.trim();
+            let fajlSlike = document.getElementById('input-slika-oglasa').files[0];
+            let grad = document.getElementById('objava-select-grad').value;
+            let kvart = document.getElementById('objava-select-kvart').value;
+            if (!naziv) { toast('Unesite naziv.', 'err'); return; }
+            if (!jePoklanjam && !parsirajCijenu(cena)) { toast('Unesite ispravnu cijenu.', 'err'); return; }
+
+            let slikaUrl = FALLBACK_SLIKA;
+            if (fajlSlike) {
+                let otpremljenUrl = await otpremiSlikuUStorage(fajlSlike);
+                if (!otpremljenUrl) { toast('Greška pri otpremanju slike.', 'err'); return; }
+                slikaUrl = otpremljenUrl;
+            }
+
+            let rezultat = await DB.dodajOglas({
+                grad: grad, kvart: kvart, dist_km: 0.1, naziv: naziv,
+                cena: jePoklanjam ? 'Poklanjam 🎁' : cena,
+                telefon: telefon || 'Chat', img: slikaUrl, odobreno: true,
+                user_id: trenutniNalog ? trenutniNalog.id : null,
+                izvorni_link: trenutniNalog ? null : `guest:${guestId}:${encodeURIComponent(imeObjavljivaca)}`
+            });
+
+            if (!rezultat.ok) { toast('Greška: ' + rezultat.msg, 'err'); return; }
+
+            await osvjeziPrisustvoGosta(imeObjavljivaca); // pamti ime i javlja da je korisnik online
+
+            zatvoriObjavu();
+            document.getElementById('select-grad').value = grad;
+            azurirajKvartoveSelect();
+            document.getElementById('select-kvart').value = kvart;
+            azurirajLokacijuUI();
+            await prikaziOglasePremaFilteru();
+            await objaviMetaAutomatski([rezultat.id], true);
+            toast('Oglas uspješno postavljen! 🎉 (+10 poena za 7 dana ako ostane aktivan)', 'ok');
+        }
+
+        function adminPretragaPromjena(v) { adminPretraga = v.trim().toLowerCase(); ucitajAdminPanelOglase(); }
+
+        async function ucitajAdminPanelOglase() {
+            let bazaOglasa = await DB.dajSve();
+            bazaOglasa.forEach(o => { oglasiCache[o.id] = o; oglasiVrijemeCache[o.id] = o.created_at; });
+            document.getElementById('panel-broj-total').innerText = bazaOglasa.length;
+            document.getElementById('admin-stat-ukupno').innerText = bazaOglasa.length;
+            document.getElementById('admin-stat-odobreno').innerText = bazaOglasa.filter(o => o.odobreno).length;
+            document.getElementById('admin-stat-cekanje').innerText = bazaOglasa.filter(o => !o.odobreno).length;
+
+            if (adminPretraga) bazaOglasa = bazaOglasa.filter(o => String(o.naziv).toLowerCase().includes(adminPretraga));
+
+            let adminLista = document.getElementById('panel-lista-upravljanje');
+            adminLista.innerHTML = '';
+
+            if (bazaOglasa.length === 0) {
+                adminLista.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Nema oglasa.</p>`;
+                return;
+            }
+
+            bazaOglasa.forEach(o => {
+                let statusBadge = o.odobreno
+                    ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">Odobreno</span>`
+                    : `<span class="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[10px] font-bold">Na čekanju</span>`;
+                let btnTekst = o.odobreno ? 'Sakrij' : 'Odobri';
+                let btnBoja = o.odobreno ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100';
+
+                adminLista.innerHTML += `
+                    <div onclick="otvoriOglas(${o.id})" class="bg-slate-50 border border-slate-200 p-2.5 rounded-2xl flex items-center justify-between space-x-2 cursor-pointer hover:border-slate-300 transition shadow-sm">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center space-x-1.5">
+                                <h5 class="text-xs font-bold text-slate-900 truncate">${o.naziv}</h5>
+                                ${statusBadge}
+                            </div>
+                            <p class="text-[10px] text-slate-500 mt-0.5">${o.grad}, ${o.kvart} · <span class="text-brand-600 font-bold">${o.cena}</span></p>
+                        </div>
+                        <div class="flex items-center space-x-1 flex-shrink-0" onclick="event.stopPropagation()">
+                            <button onclick="adminPromijeniSliku(${o.id})" title="Promijeni sliku" class="px-2 py-1 rounded-lg border border-sky-200 bg-sky-50 text-sky-600 text-[10px] font-bold hover:bg-sky-100 transition"><i class="fa-solid fa-camera"></i></button>
+                            <button onclick="adminToggle(${o.id}, ${o.odobreno})" class="px-2 py-1 rounded-lg border text-[10px] font-bold transition ${btnBoja}">${btnTekst}</button>
+                            <button onclick="adminObrisi(${o.id})" class="px-2 py-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 text-[10px] font-bold hover:bg-rose-100 transition"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // Ovlast za admina da doda/promijeni fotografiju na BILO KOM oglasu,
+        // bez obzira ko ga je postavio — rješava slučaj kad korisnik objavi
+        // oglas bez slike ili sa lošom slikom. Jedan skriveni file input se
+        // ponovo koristi za sve redove; adminSlikaCiljniId pamti koji je
+        // oglas trenutno na meti dok korisnik bira fajl.
+        let adminSlikaCiljniId = null;
+        function adminPromijeniSliku(id) {
+            adminSlikaCiljniId = id;
+            document.getElementById('admin-input-slika').click();
+        }
+        async function adminPromijeniSlikuOdabrana(event) {
+            let fajl = event.target.files[0];
+            if (!fajl || !adminSlikaCiljniId) return;
+            toast('Otpremam sliku...', 'info');
+            let url = await otpremiSlikuUStorage(fajl);
+            event.target.value = '';
+            if (!url) { toast('Greška pri otpremanju slike.', 'err'); return; }
+            let rezultat = await DB.azurirajSliku(adminSlikaCiljniId, url);
+            adminSlikaCiljniId = null;
+            if (!rezultat.ok) { toast('Greška: ' + rezultat.msg, 'err'); return; }
+            await ucitajAdminPanelOglase();
+            await prikaziOglasePremaFilteru();
+            toast('Slika ažurirana! 📸', 'ok');
+        }
+
+        async function adminToggle(id, trenutniStatus) {
+            await DB.promeniStatusOdobrenja(id, trenutniStatus);
+            await ucitajAdminPanelOglase();
+            await prikaziOglasePremaFilteru();
+            toast(trenutniStatus ? 'Oglas sakriven.' : 'Oglas odobren! ✅', 'ok');
+        }
+
+        async function adminObrisi(id) {
+            if (confirm('Da li ste sigurni da želite trajno da obrišete ovaj oglas?')) {
+                await DB.obrisiOglas(id);
+                await ucitajAdminPanelOglase();
+                await prikaziOglasePremaFilteru();
+                toast('Oglas obrisan.', 'info');
+            }
+        }
+
+        function otvoriOglas(id) {
+            const o = oglasiCache[id];
+            if (!o) return;
+            trenutniOglasId = id;
+            document.getElementById('modal-title').innerText = o.naziv;
+            document.getElementById('modal-price').innerText = o.cena;
+            document.getElementById('modal-dist').innerHTML = `<i class="fa-solid fa-location-dot text-brand-500 mr-1"></i> Udaljeno ${o.distKm} km`;
+            document.getElementById('modal-lokacija-prodavca').innerText = `${o.grad}, ${o.kvart}`;
+
+            const prodavacRed = document.getElementById('modal-prodavac-red');
+            prodavacRed.classList.add('hidden');
+            if (prikaziGostaUDetaljima(o)) { /* guest seller */ }
+            else if (o.user_id) {
+                dajProfilInfo(o.user_id).then(info => {
+                    if (!info || trenutniOglasId !== id) return;
+                    document.getElementById('modal-prodavac-nadimak').innerText = info.nadimak;
+                    document.getElementById('modal-prodavac-poeni').innerText = info.poeni + ' poena';
+                    prodavacRed.classList.remove('hidden');
+                });
+            }
+            const imgEl = document.getElementById('modal-img');
+            imgEl.onerror = function() { this.onerror = null; this.src = FALLBACK_SLIKA; };
+            imgEl.src = o.img || FALLBACK_SLIKA;
+            let vOglas = oglasiVrijemeCache[id];
+            document.getElementById('modal-vrijeme').innerHTML = '<i class="fa-regular fa-clock text-slate-400 mr-1"></i> Objavljeno: ' + (vrijemeOdObjave(vOglas) || 'nepoznato');
+            document.getElementById('modal-badge-novo').classList.toggle('hidden', !jeNovo(vOglas));
+            azurirajFavDugme();
+
+            let telLink = document.getElementById('modal-tel-link');
+            let telWrapper = document.getElementById('modal-tel-wrapper');
+            if (o.telefon && o.telefon !== 'Chat' && o.telefon !== 'Nije unijet' && o.telefon !== 'Chat podrška') {
+                document.getElementById('modal-tel-tekst').innerText = `Pozovi: ${o.telefon}`;
+                telLink.href = `tel:${o.telefon.replace(/\s/g, '')}`;
+                telWrapper.classList.remove('hidden');
+            } else {
+                telWrapper.classList.add('hidden');
+            }
+
+            // Originalni FB link (samo za tebe kao admina, da znaš o kom
+            // proizvodu/objavi je riječ ako ti neko napiše poruku) —
+            // običnim posjetiocima se ovo dugme NIKAD ne prikazuje.
+            let fbLink = document.getElementById('modal-fb-link');
+            if (panelOtklucan && o.izvorni_link) {
+                fbLink.href = o.izvorni_link;
+                fbLink.classList.remove('hidden');
+                fbLink.classList.add('flex');
+            } else {
+                fbLink.classList.add('hidden');
+                fbLink.classList.remove('flex');
+            }
+
+            document.getElementById('input-ime-poruka').value = localStorage.getItem('kus_moje_ime') || '';
+            document.getElementById('input-poruka').value = '';
+
+            ucitajPoruke(id);
+            pretplatiSeNaPoruke(id);
+            document.getElementById('modal-oglas').classList.remove('hidden');
+        }
+
+        async function podijeliOglas() {
+            const o = oglasiCache[trenutniOglasId];
+            if (!o) return;
+            const linkKaOglasu = `${location.origin}${location.pathname}?oglas=${o.id}`;
+            const opisTeksta = `${o.naziv} - ${o.cena} · ${o.grad}, ${o.kvart} (Kupi u komšiluku 🏘️)`;
+            const shareData = { title: o.naziv, text: opisTeksta, url: linkKaOglasu };
+
+            // Ako browser podržava dijeljenje slike (Web Share API Level 2),
+            // pokušaj da priložiš i fotografiju oglasa, ne samo tekst/link.
+            try {
+                if (o.img && navigator.canShare) {
+                    const odgovor = await fetch(o.img);
+                    const blob = await odgovor.blob();
+                    const fajl = new File([blob], 'oglas.jpg', { type: blob.type || 'image/jpeg' });
+                    if (navigator.canShare({ files: [fajl] })) {
+                        await navigator.share({ ...shareData, files: [fajl] });
+                        return;
+                    }
+                }
+            } catch (e) { /* nastavi na obično dijeljenje ispod */ }
+
+            if (navigator.share) {
+                try { await navigator.share(shareData); return; } catch (e) { /* korisnik otkazao ili nepodržano */ }
+            }
+            navigator.clipboard.writeText(`${opisTeksta} - ${linkKaOglasu}`).then(() => toast('Link kopiran 📋', 'ok'));
+        }
+
+        function otvoriLightbox() {
+            document.getElementById('lightbox-img').src = document.getElementById('modal-img').src;
+            document.getElementById('lightbox').classList.remove('hidden');
+        }
+        function zatvoriLightbox() { document.getElementById('lightbox').classList.add('hidden'); }
+
+        function zatvoriOglas() {
+            document.getElementById('modal-oglas').classList.add('hidden');
+            if (trenutniChatKanal) { supabaseClient.removeChannel(trenutniChatKanal); trenutniChatKanal = null; }
+            trenutniOglasId = null;
+            pokreniBrojacPoruka();
+        }
+
+        async function ucitajPoruke(oglasId) {
+            let istorija = document.getElementById('cet-istorija');
+            istorija.innerHTML = `<p class="text-slate-400 text-center pt-6"><i class="fa-solid fa-spinner spin mr-1"></i>Učitavam poruke...</p>`;
+            const { data, error } = await supabaseClient.from('poruke').select('*').eq('oglas_id', oglasId).order('created_at', { ascending: true });
+            if (error || !data || data.length === 0) { istorija.innerHTML = `<p class="text-slate-400 text-center pt-6">Budite prvi koji će napisati poruku 👋</p>`; return; }
+            istorija.innerHTML = '';
+            data.forEach(p => dodajPorukuUIstoriju(p.ime, p.tekst));
+            istorija.scrollTop = istorija.scrollHeight;
+        }
+
+        function dodajPorukuUIstoriju(ime, tekst) {
+            let istorija = document.getElementById('cet-istorija');
+            if (istorija.querySelector('p.text-slate-400')) istorija.innerHTML = '';
+            const mojeIme = localStorage.getItem('kus_moje_ime') || '';
+            const moja = mojeIme && ime === mojeIme;
+            istorija.innerHTML += moja
+                ? `<div class="self-end bg-brand-500 text-white p-2.5 rounded-2xl max-w-[85%] shadow-sm"><span class="block text-[9px] text-emerald-100 font-bold mb-0.5">Vi (${ime})</span>${tekst}</div>`
+                : `<div class="self-start bg-slate-200 text-slate-800 p-2.5 rounded-2xl max-w-[85%] shadow-sm"><span class="block text-[9px] text-brand-700 font-bold mb-0.5">${ime}</span>${tekst}</div>`;
+            istorija.scrollTop = istorija.scrollHeight;
+        }
+
+        function pretplatiSeNaPoruke(oglasId) {
+            if (trenutniChatKanal) supabaseClient.removeChannel(trenutniChatKanal);
+            trenutniChatKanal = supabaseClient
+                .channel('poruke-oglas-' + oglasId)
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'poruke', filter: `oglas_id=eq.${oglasId}` },
+                    (payload) => dodajPorukuUIstoriju(payload.new.ime, payload.new.tekst))
+                .subscribe();
+        }
+
+        async function posaljiPoruku() {
+            let inputIme = document.getElementById('input-ime-poruka');
+            let inputTekst = document.getElementById('input-poruka');
+            let ime = inputIme.value.trim();
+            let tekst = inputTekst.value.trim();
+            if (!ime) { toast('Unesite svoje ime.', 'err'); inputIme.focus(); return; }
+            if (!tekst) return;
+            localStorage.setItem('kus_moje_ime', ime);
+            await supabaseClient.from('poruke').insert([{ oglas_id: trenutniOglasId, ime: ime, tekst: tekst }]);
+            inputTekst.value = '';
+        }
+
+        async function pokreniBrojacPoruka() {
+            try {
+                const { count, error } = await supabaseClient.from('poruke').select('*', { count: 'exact', head: true });
+                if (!error && count !== null) document.getElementById('broj-neprocitanih-tekst').innerText = count;
+            } catch (e) {}
+        }
+
+        async function ucitajSveRazgovore() {
+            let listaDiv = document.getElementById('lista-razgovora-korisnik');
+            listaDiv.innerHTML = `<p class="text-slate-400 text-xs text-center py-4">Učitavam poruke...</p>`;
+            const { data, error } = await supabaseClient.from('poruke').select('*, oglasi(naziv, grad, kvart, img, cena)').order('created_at', { ascending: false });
+            if (error || !data || data.length === 0) { listaDiv.innerHTML = `<p class="text-slate-400 text-xs text-center py-4">Nemate aktivnih poruka.</p>`; return; }
+
+            let mapaOglasa = {};
+            data.forEach(p => { if (!mapaOglasa[p.oglas_id] && p.oglasi) { oglasiCache[p.oglas_id] = oglasiCache[p.oglas_id] || { id: p.oglas_id, naziv: p.oglasi.naziv, grad: p.oglasi.grad, kvart: p.oglasi.kvart, img: p.oglasi.img, cena: p.oglasi.cena, distKm: 0, telefon: 'Chat' }; mapaOglasa[p.oglas_id] = p; } });
+
+            let jedinstveniRazgovori = Object.values(mapaOglasa);
+            listaDiv.innerHTML = '';
+            jedinstveniRazgovori.forEach(r => {
+                let oglas = r.oglasi;
+                listaDiv.innerHTML += `
+                    <div onclick="otvoriOglas(${r.oglas_id})" class="bg-slate-50 border border-slate-200 p-3 rounded-2xl flex items-center space-x-3 cursor-pointer hover:border-slate-300 transition shadow-sm">
+                        <img src="${oglas.img || FALLBACK_SLIKA}" onerror="this.onerror=null;this.src='${FALLBACK_SLIKA}'" class="w-10 h-10 rounded-xl object-cover border border-slate-200 flex-shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-baseline">
+                                <h4 class="font-bold text-xs text-slate-900 truncate">${oglas.naziv}</h4>
+                                <span class="text-[10px] text-brand-600 font-extrabold ml-1">${oglas.cena}</span>
+                            </div>
+                            <p class="text-xs text-slate-600 truncate mt-0.5"><b>${r.ime}:</b> ${r.tekst}</p>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function otvoriObjavu() {
+            document.getElementById('input-ime-oglasa').value = localStorage.getItem('kus_moje_ime') || (trenutniNalog ? trenutniNalog.nadimak : '');
+            document.getElementById('input-naziv-oglasa').value = '';
+            document.getElementById('input-cena-oglasa').value = '';
+            document.getElementById('input-telefon-oglasa').value = '';
+            document.getElementById('input-slika-oglasa').value = '';
+            document.getElementById('pregled-slike-oglasa').classList.add('hidden');
+            let trenutniGrad = document.getElementById('select-grad').value;
+            let trenutniKvart = document.getElementById('select-kvart').value;
+            document.getElementById('objava-select-grad').value = trenutniGrad;
+            azurirajKvartoveObjave();
+            document.getElementById('objava-select-kvart').value = trenutniKvart;
+            if (jePoklanjam) togglePoklanjam();
+            document.getElementById('modal-objava').classList.remove('hidden');
+        }
+        function zatvoriObjavu() { document.getElementById('modal-objava').classList.add('hidden'); }
+
+        // ===== ZAJEDNICA (obavještenja + izgubljeno/nađeno) =====
+
+        function promeniGlavniTab(tab) {
+            aktivniTab = tab;
+            document.getElementById('kontejner-oglasi-tab').classList.toggle('hidden', tab !== 'oglasi');
+            document.getElementById('kontejner-zajednica-tab').classList.toggle('hidden', tab !== 'zajednica');
+            document.getElementById('glavni-tab-btn-oglasi').classList.toggle('bg-white', tab === 'oglasi');
+            document.getElementById('glavni-tab-btn-oglasi').classList.toggle('shadow-sm', tab === 'oglasi');
+            document.getElementById('glavni-tab-btn-oglasi').classList.toggle('text-brand-700', tab === 'oglasi');
+            document.getElementById('glavni-tab-btn-oglasi').classList.toggle('text-slate-500', tab !== 'oglasi');
+            document.getElementById('glavni-tab-btn-zajednica').classList.toggle('bg-white', tab === 'zajednica');
+            document.getElementById('glavni-tab-btn-zajednica').classList.toggle('shadow-sm', tab === 'zajednica');
+            document.getElementById('glavni-tab-btn-zajednica').classList.toggle('text-sky-700', tab === 'zajednica');
+            document.getElementById('glavni-tab-btn-zajednica').classList.toggle('text-slate-500', tab !== 'zajednica');
+            if (tab === 'zajednica' && Object.keys(zajednicaCache).length === 0) ucitajZajednicu();
+        }
+
+        function promeniZajednicaFilter(f) {
+            zajednicaFilter = f;
+            ['sve', 'obavjestenje', 'izgubljeno', 'nadjeno'].forEach(id => {
+                const btn = document.getElementById('zaj-filter-' + id);
+                const aktivan = id === f;
+                btn.classList.toggle('bg-sky-500', aktivan);
+                btn.classList.toggle('text-white', aktivan);
+                btn.classList.toggle('border-sky-500', aktivan);
+                btn.classList.toggle('bg-white', !aktivan);
+                btn.classList.toggle('text-slate-600', !aktivan);
+                btn.classList.toggle('border-slate-200', !aktivan);
+            });
+            renderZajednicu();
+        }
+
+        async function ucitajZajednicu() {
+            const lista = await DB.dajZajednicu();
+            zajednicaCache = {};
+            lista.forEach(z => zajednicaCache[z.id] = z);
+            renderZajednicu();
+        }
+
+        function renderZajednicu() {
+            const kontejner = document.getElementById('lista-zajednica-inner');
+            let stavke = Object.values(zajednicaCache).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            if (zajednicaFilter !== 'sve') stavke = stavke.filter(z => z.tip === zajednicaFilter);
+
+            if (!stavke.length) {
+                kontejner.innerHTML = `<div class="text-center py-10">
+                    <i class="fa-solid fa-bullhorn text-3xl text-slate-300 mb-2"></i>
+                    <p class="text-slate-500 text-xs font-bold">Još nema objava ovdje. Budi prvi/a!</p>
+                </div>`;
+                return;
+            }
+
+            const tipInfo = {
+                obavjestenje: { ikona: '📢', boja: 'sky', naziv: 'Obavještenje' },
+                izgubljeno: { ikona: '🔍', boja: 'amber', naziv: 'Izgubljeno' },
+                nadjeno: { ikona: '✅', boja: 'emerald', naziv: 'Nađeno' }
+            };
+
+            kontejner.innerHTML = stavke.map(z => {
+                const info = tipInfo[z.tip] || tipInfo.obavjestenje;
+                const lokacijaDio = [z.grad, z.kvart, z.zgrada_ulica].filter(Boolean).join(', ');
+                return `
+                <div class="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm flex space-x-3 anim-fade-up">
+                    ${z.img ? `<img src="${z.img}" class="w-16 h-16 rounded-xl object-cover border border-slate-100 flex-shrink-0" onerror="this.style.display='none'">` : `<div class="w-16 h-16 rounded-xl bg-${info.boja}-50 border border-${info.boja}-100 flex items-center justify-center text-2xl flex-shrink-0">${info.ikona}</div>`}
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-1.5">
+                            <span class="text-[9px] font-bold uppercase tracking-wider text-${info.boja}-700 bg-${info.boja}-50 border border-${info.boja}-100 px-1.5 py-0.5 rounded-md">${info.ikona} ${info.naziv}</span>
+                        </div>
+                        <h3 class="font-bold text-xs text-slate-900 mt-1 truncate">${z.naslov}</h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2">${z.opis}</p>
+                        <p class="text-[10px] text-slate-400 mt-1 font-semibold"><i class="fa-solid fa-location-dot mr-0.5"></i>${lokacijaDio}</p>
+                        ${z.telefon ? `<a href="tel:${z.telefon.replace(/\s/g,'')}" class="inline-block mt-1.5 text-[10px] font-bold text-${info.boja}-700 bg-${info.boja}-50 border border-${info.boja}-100 px-2.5 py-1 rounded-lg"><i class="fa-solid fa-phone mr-1"></i>${z.telefon}</a>` : ''}
+                    </div>
+                    ${panelOtklucan ? `<button onclick="obrisiZajednicuStavku('${z.id}')" class="text-slate-300 hover:text-rose-500 flex-shrink-0"><i class="fa-solid fa-trash text-xs"></i></button>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        async function obrisiZajednicuStavku(id) {
+            await DB.obrisiZajednicu(id);
+            delete zajednicaCache[id];
+            renderZajednicu();
+        }
+
+        function ucitajPregledSlikeZajednica(event) {
+            let fajl = event.target.files[0];
+            let pregled = document.getElementById('pregled-slike-zajednica');
+            if (!fajl) { pregled.classList.add('hidden'); pregled.src = ''; return; }
+            pregled.src = URL.createObjectURL(fajl);
+            pregled.classList.remove('hidden');
+        }
+
+        function otvoriZajednicaObjavu() {
+            document.getElementById('zaj-select-tip').value = 'obavjestenje';
+            document.getElementById('zaj-input-naslov').value = '';
+            document.getElementById('zaj-input-opis').value = '';
+            document.getElementById('zaj-input-zgrada').value = '';
+            document.getElementById('zaj-input-telefon').value = '';
+            document.getElementById('input-slika-zajednica').value = '';
+            document.getElementById('pregled-slike-zajednica').classList.add('hidden');
+            const selGrad = document.getElementById('zaj-select-grad');
+            if (!selGrad.options.length) selGrad.innerHTML = document.getElementById('select-grad').innerHTML;
+            selGrad.value = document.getElementById('select-grad').value;
+            document.getElementById('modal-zajednica').classList.remove('hidden');
+        }
+        function zatvoriZajednicaObjavu() { document.getElementById('modal-zajednica').classList.add('hidden'); }
+
+        async function objaviZajednicu() {
+            const tip = document.getElementById('zaj-select-tip').value;
+            const naslov = document.getElementById('zaj-input-naslov').value.trim();
+            const opis = document.getElementById('zaj-input-opis').value.trim();
+            const grad = document.getElementById('zaj-select-grad').value;
+            const zgrada = document.getElementById('zaj-input-zgrada').value.trim();
+            const telefon = document.getElementById('zaj-input-telefon').value.trim();
+            const fajlSlike = document.getElementById('input-slika-zajednica').files[0];
+
+            if (!naslov) { toast('Unesite naslov.', 'err'); return; }
+            if (!opis) { toast('Unesite opis.', 'err'); return; }
+
+            let slikaUrl = null;
+            if (fajlSlike) {
+                slikaUrl = await otpremiSlikuUStorage(fajlSlike);
+                if (!slikaUrl) { toast('Greška pri otpremanju slike.', 'err'); return; }
+            }
+
+            const rezultat = await DB.dodajZajednicu({
+                tip, naslov, opis, grad, zgrada_ulica: zgrada || null, telefon: telefon || null, img: slikaUrl
+            });
+            if (!rezultat.ok) { toast('Greška: ' + rezultat.msg, 'err'); return; }
+
+            zatvoriZajednicaObjavu();
+            await ucitajZajednicu();
+            toast('Objava uspješno postavljena! 🎉', 'ok');
+        }
+    </script>
+    <input type="file" id="admin-input-slika" accept="image/*" style="display:none" onchange="adminPromijeniSlikuOdabrana(event)">
+</body>
+</html>
