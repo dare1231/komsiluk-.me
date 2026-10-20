@@ -1454,7 +1454,11 @@
             const status = document.getElementById('temu-paket-status');
             status.innerText = 'Učitavam podatke sa Temua...';
             try {
-                const response = await fetch('/api/temu-products', { method: 'POST', headers, body: JSON.stringify({ links }) });
+                let response = await fetch('/api/temu-products', { method: 'POST', headers, body: JSON.stringify({ links }) });
+                if (response.status === 401 || response.status === 403) {
+                    const refreshedHeaders = await authHeaders(true);
+                    if (refreshedHeaders) response = await fetch('/api/temu-products', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ links }) });
+                }
                 const body = await response.json();
                 if (!response.ok) throw new Error(body.error || 'Paket nije sačuvan.');
                 status.innerText = 'Paket je sačuvan i spreman za objavu.';
