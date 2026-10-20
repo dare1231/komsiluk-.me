@@ -13,6 +13,7 @@ const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
 const COLLAGE_FONT = 'DejaVu Sans';
 let resolvedPageToken = null;
+let resolvedInstagramUserId = null;
 async function isSupabaseUserToken(token) {
   if (!token) return false;
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
@@ -31,6 +32,21 @@ async function getPageToken() {
   const page = (accountData.data || []).find(item => String(item.id) === String(PAGE_ID));
   resolvedPageToken = page?.access_token || PAGE_ACCESS_TOKEN;
   return resolvedPageToken;
+}
+async function getInstagramUserId() {
+  if (resolvedInstagramUserId) return resolvedInstagramUserId;
+  const token = await getPageToken();
+  const r = await fetch(`${GRAPH}/${PAGE_ID}?fields=instagram_business_account&access_token=${encodeURIComponent(token)}`);
+  const data = await r.json();
+  if (!r.ok || data.error) {
+    const error = data.error || {};
+    const details = [error.type, error.code != null && `code=${error.code}`, error.error_subcode != null && `subcode=${error.error_subcode}`, error.fbtrace_id && `fbtrace_id=${error.fbtrace_id}`].filter(Boolean).join(', ');
+    throw new Error(`${error.message || `Meta Page lookup ${r.status}`} [/PAGE_ID?fields=instagram_business_account${details ? `; ${details}` : ''}]`);
+  }
+  const linkedId = data.instagram_business_account?.id;
+  if (!linkedId) throw new Error(`Facebook Page ${PAGE_ID} nema povezan Instagram Professional nalog.`);
+  resolvedInstagramUserId = String(linkedId);
+  return resolvedInstagramUserId;
 }
 const publicImage = img => img && img.startsWith('http') ? img : `${PUBLIC_SITE_URL}${img || '/assets/neutral-product.svg'}`;
 async function supabase(path, options = {}) {
@@ -99,7 +115,7 @@ module.exports = async (req, res) => {
   const byCron = Boolean(CRON_SECRET && authorization === `Bearer ${CRON_SECRET}`);
   const byLoggedInAdmin = !bySecret && !byCron && await isSupabaseUserToken(bearer);
   if (!bySecret && !byCron && !byLoggedInAdmin) return res.status(401).json({ error: 'Neautorizovan publish.' });
-  if (!PAGE_ID || !PAGE_ACCESS_TOKEN || !IG_USER_ID || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
+  if (!PAGE_ID || !PAGE_ACCESS_TOKEN || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
   try {
     const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const manual = payload.manual === true;
@@ -172,8 +188,9 @@ module.exports = async (req, res) => {
       // IG_ACCESS_TOKEN here: that token belongs to the separate Instagram
       // Login flow and causes "Invalid OAuth access token" on graph.facebook.com.
       const instagramToken = await getPageToken();
-      const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION }, instagramToken);
-      ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id }, instagramToken);
+      const instagramUserId = await getInstagramUserId();
+      const media = await graph(`/${instagramUserId}/media`, { image_url: imageUrl, caption: CAPTION }, instagramToken);
+      ig = await graph(`/${instagramUserId}/media_publish`, { creation_id: media.id }, instagramToken);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ instagram_media_id: ig.id || null }) });
     } catch (error) {
       if (!fb) {
