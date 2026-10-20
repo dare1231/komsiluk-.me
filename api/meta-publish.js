@@ -121,8 +121,15 @@ async function upload(buffer, slot) {
   const path = `social-collages/${slot}.jpg`;
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/oglasi-slike/${path}`, { method: 'POST', headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' }, body: buffer });
   if (!r.ok) throw new Error(`Ne mogu sačuvati kolaž (${r.status}).`);
-  // Meta must receive a direct public JPEG response with no storage redirect.
-  return `${PUBLIC_SITE_URL}/api/social-image?slot=${encodeURIComponent(slot)}`;
+  const signed = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/oglasi-slike/${path}`, {
+    method: 'POST',
+    headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expiresIn: 3600 })
+  });
+  const signedData = await signed.json();
+  if (!signed.ok || !signedData.signedURL) throw new Error(`Ne mogu napraviti signed URL za kolaž (${signed.status}).`);
+  // Meta receives a time-limited direct JPEG URL, without Vercel or bucket auth.
+  return signedData.signedURL.startsWith('http') ? signedData.signedURL : `${SUPABASE_URL}${signedData.signedURL}`;
 }
 function packageKey(local, temu) {
   const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
