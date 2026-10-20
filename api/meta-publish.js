@@ -209,7 +209,7 @@ module.exports = async (req, res) => {
       // Instagram Login does not require the account to be linked to the Facebook Page.
       if (IG_PUBLISH_TOKEN) {
         const instagramUserId = await getInstagramLoginUserId(IG_PUBLISH_TOKEN);
-        const media = await instagramGraph(`/${instagramUserId}/media`, { image_url: imageUrl, caption: CAPTION }, IG_PUBLISH_TOKEN);
+        const media = await instagramGraph(`/${instagramUserId}/media`, { image_url: imageUrl, media_type: 'IMAGE', caption: CAPTION }, IG_PUBLISH_TOKEN);
         ig = await instagramGraph(`/${instagramUserId}/media_publish`, { creation_id: media.id }, IG_PUBLISH_TOKEN);
       } else {
         const instagramToken = await getPageToken();
