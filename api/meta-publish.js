@@ -41,7 +41,13 @@ async function supabase(path, options = {}) {
 async function graph(path, body, accessToken = '') {
   const token = accessToken || await getPageToken();
   const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: token }) });
-  const data = await r.json(); if (!r.ok || data.error) throw new Error(data.error?.message || `Meta Graph API ${r.status}`); return data;
+  const data = await r.json();
+  if (!r.ok || data.error) {
+    const error = data.error || {};
+    const details = [error.type, error.code != null && `code=${error.code}`, error.error_subcode != null && `subcode=${error.error_subcode}`, error.fbtrace_id && `fbtrace_id=${error.fbtrace_id}`].filter(Boolean).join(', ');
+    throw new Error(`${error.message || `Meta Graph API ${r.status}`} [${path}${details ? `; ${details}` : ''}]`);
+  }
+  return data;
 }
 async function graphPhoto(pageId, buffer, caption) {
   const form = new FormData();
@@ -50,7 +56,13 @@ async function graphPhoto(pageId, buffer, caption) {
   form.append('published', 'true');
   form.append('access_token', await getPageToken());
   const r = await fetch(`${GRAPH}/${pageId}/photos`, { method: 'POST', body: form });
-  const data = await r.json(); if (!r.ok || data.error) throw new Error(data.error?.message || `Meta Graph API ${r.status}`); return data;
+  const data = await r.json();
+  if (!r.ok || data.error) {
+    const error = data.error || {};
+    const details = [error.type, error.code != null && `code=${error.code}`, error.error_subcode != null && `subcode=${error.error_subcode}`, error.fbtrace_id && `fbtrace_id=${error.fbtrace_id}`].filter(Boolean).join(', ');
+    throw new Error(`${error.message || `Meta Graph API ${r.status}`} [/photos${details ? `; ${details}` : ''}]`);
+  }
+  return data;
 }
 const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 async function download(url) { const r = await fetch(url); if (!r.ok) throw new Error(`Slika nije dostupna: ${r.status}`); return Buffer.from(await r.arrayBuffer()); }
