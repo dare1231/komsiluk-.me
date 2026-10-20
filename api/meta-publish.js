@@ -68,10 +68,9 @@ async function upload(buffer, slot) {
   const path = `social-collages/${slot}.jpg`;
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/oglasi-slike/${path}`, { method: 'POST', headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' }, body: buffer });
   if (!r.ok) throw new Error(`Ne mogu sačuvati kolaž (${r.status}).`);
-  const signed = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/oglasi-slike/${path}`, { method: 'POST', headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: 3600 }) });
-  const signedData = await signed.json();
-  if (!signed.ok || !signedData.signedURL) throw new Error(`Ne mogu napraviti javni link za kolaž (${signed.status}).`);
-  return signedData.signedURL.startsWith('http') ? signedData.signedURL : `${SUPABASE_URL}/storage/v1${signedData.signedURL}`;
+  // Instagram mora sam da preuzme sliku; stabilni javni URL je pouzdaniji od
+  // privremenog signed URL-a i provereno je dostupan Meta crawleru.
+  return `${SUPABASE_URL}/storage/v1/object/public/oglasi-slike/${path}`;
 }
 function packageKey(local, temu) {
   const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
