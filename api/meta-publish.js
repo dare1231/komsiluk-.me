@@ -140,17 +140,18 @@ async function upload(buffer, slot) {
   }
   // Verify what Instagram will actually fetch: it must be a direct, anonymous JPEG response.
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/oglasi-slike/${path}`;
+  // Preferred: our own domain (clean .jpg URL, no query token), which Instagram fetches reliably.
+  const siteUrl = `${PUBLIC_SITE_URL.replace(/\/+$/, '')}/api/social-image/${slot}.jpg`;
   const problems = [];
-  for (const candidate of [signedUrl, publicUrl]) {
+  for (const [label, candidate] of [['site', siteUrl], ['signed', signedUrl], ['public', publicUrl]]) {
     try {
       const check = await fetch(candidate, { redirect: 'follow' });
       const type = check.headers.get('content-type') || '';
-      const size = Number(check.headers.get('content-length') || 0);
       if (check.ok && /^image\/jpe?g/i.test(type)) { await check.arrayBuffer().catch(() => {}); return candidate; }
-      problems.push(`${candidate === signedUrl ? 'signed' : 'public'}: HTTP ${check.status}, ${type || 'bez content-type'}${size ? `, ${size}B` : ''}`);
-    } catch (error) { problems.push(`${candidate === signedUrl ? 'signed' : 'public'}: ${error.message}`); }
+      problems.push(`${label}: HTTP ${check.status}, ${type || 'bez content-type'}`);
+    } catch (error) { problems.push(`${label}: ${error.message}`); }
   }
-  throw new Error(`Kolaž nije javno dostupan kao JPEG za Instagram (${problems.join(' | ')}). Provjeri da bucket oglasi-slike postoji i da je Public.`);
+  throw new Error(`Kolaž nije javno dostupan kao JPEG za Instagram (${problems.join(' | ')}). Provjeri PUBLIC_SITE_URL u Vercelu i da li je bucket oglasi-slike Public.`);
 }
 function packageKey(local, temu) {
   const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
@@ -237,6 +238,7 @@ module.exports = async (req, res) => {
       if (IG_PUBLISH_TOKEN) {
         const instagramUserId = await getInstagramLoginUserId(IG_PUBLISH_TOKEN);
         const media = await instagramGraph(`/${instagramUserId}/media`, { image_url: imageUrl, caption: CAPTION }, IG_PUBLISH_TOKEN);
+        await new Promise(resolve => setTimeout(resolve, 3000));
         ig = await instagramGraph(`/${instagramUserId}/media_publish`, { creation_id: media.id }, IG_PUBLISH_TOKEN);
       } else {
         const instagramToken = await getPageToken();
