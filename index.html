@@ -1455,7 +1455,7 @@
             status.innerText = 'Učitavam podatke sa Temua...';
             try {
                 let response = await fetch('/api/temu-products', { method: 'POST', headers, body: JSON.stringify({ links }) });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     const refreshedHeaders = await authHeaders(true);
                     if (refreshedHeaders) response = await fetch('/api/temu-products', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ links }) });
                 }
@@ -1493,11 +1493,11 @@
             status.innerText = 'Šaljem kolaž na Facebook i Instagram...';
             try {
                 let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ manual: true }) });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     const refreshedHeaders = await authHeaders(true);
                     if (refreshedHeaders) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ manual: true }) });
                 }
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     await supabaseClient.auth.signOut();
                     adminAccessToken = null;
                     panelOtklucan = false;
