@@ -155,7 +155,11 @@ module.exports = async (req, res) => {
       const existingFacebookId = queued.map(row => row.facebook_post_id).find(Boolean);
       fb = existingFacebookId ? { id: existingFacebookId } : await graphPhoto(PAGE_ID, collage, CAPTION);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ facebook_post_id: fb.id || null }) });
-      const instagramToken = IG_PUBLISH_TOKEN || await getPageToken();
+      // This endpoint uses the Instagram API with Facebook Login, which
+      // requires the connected Facebook Page access token. Do not prefer
+      // IG_ACCESS_TOKEN here: that token belongs to the separate Instagram
+      // Login flow and causes "Invalid OAuth access token" on graph.facebook.com.
+      const instagramToken = await getPageToken();
       const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION }, instagramToken);
       ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id }, instagramToken);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ instagram_media_id: ig.id || null }) });
