@@ -9,5 +9,11 @@
       "path": "/api/meta-publish",
       "schedule": "15 5 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/meta-publish.js": {
+      "includeFiles": "api/fonts/**",
+      "maxDuration": 60
+    }
+  }
 }

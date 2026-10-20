@@ -1,4 +1,4 @@
-const sharp = require('sharp');
+const { buildCollage } = require('./_collage');
 const crypto = require('crypto');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const IG_GRAPH = 'https://graph.instagram.com/v26.0';
@@ -12,7 +12,6 @@ const PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || process.env.META_P
 const IG_USER_ID = process.env.IG_USER_ID || process.env.META_IG_USER_ID || process.env.IG_ID;
 const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
-const COLLAGE_FONT = 'DejaVu Sans';
 let resolvedPageToken = null;
 let resolvedInstagramUserId = null;
 async function isSupabaseUserToken(token) {
@@ -105,17 +104,15 @@ async function graphPhoto(pageId, buffer, caption) {
 }
 const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 async function download(url) { const r = await fetch(url); if (!r.ok) throw new Error(`Slika nije dostupna: ${r.status}`); return Buffer.from(await r.arrayBuffer()); }
-async function makeCollage(localAds, temu, slot) {
-  const items = [{ ...temu, mjesto: 'Temu' }, ...localAds.map(o => ({ ...o, mjesto: o.grad }))];
-  const cardW = 520, cardH = 300, startY = 180;
-  const layers = [];
-  for (let i = 0; i < items.length; i++) {
-    const resized = await sharp(await download(publicImage(items[i].img || items[i].image_url))).resize(cardW, cardH, { fit: 'cover' }).jpeg({ quality: 90 }).toBuffer();
-    layers.push({ input: resized, left: (i % 2) * 540 + 10, top: Math.floor(i / 2) * 390 + startY });
+async function makeCollage(localAds, temu) {
+  const items = [{ ...temu, isTemu: true, mjesto: 'Temu preporuka' }, ...localAds.map(o => ({ ...o, mjesto: o.grad }))];
+  const prepared = [];
+  for (const item of items.slice(0, 4)) {
+    let image = null;
+    try { image = await download(publicImage(item.img || item.image_url)); } catch (error) { console.error('[Collage image]', error.message); }
+    prepared.push({ name: item.naziv || item.name, place: item.mjesto, price: item.isTemu ? item.cijena : (item.cena ?? item.cijena), isTemu: Boolean(item.isTemu), image });
   }
-  const labels = items.map((o, i) => { const x = (i % 2) * 540 + 24, y = Math.floor(i / 2) * 390 + startY; return `<text x="${x}" y="${y + 332}" fill="#0f172a" font-family="${COLLAGE_FONT}" font-size="24" font-weight="700">${esc(String(o.naziv || o.name).slice(0, 34))}</text><text x="${x}" y="${y + 360}" fill="#475569" font-family="${COLLAGE_FONT}" font-size="19">${esc(String(o.mjesto || '').slice(0, 44))}</text>`; }).join('');
-  const header = Buffer.from(`<svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg"><rect width="1080" height="1080" fill="#f8fafc"/><rect width="1080" height="155" fill="#0f766e"/><text x="54" y="70" fill="white" font-family="${COLLAGE_FONT}" font-size="39" font-weight="700">Najnovije na aplikaciji</text><text x="54" y="119" fill="#d1fae5" font-family="${COLLAGE_FONT}" font-size="25">4 proizvoda · link u bio</text>${labels}</svg>`);
-  return sharp({ create: { width: 1080, height: 1080, channels: 4, background: '#f8fafc' } }).composite([{ input: header }, ...layers]).jpeg({ quality: 90 }).toBuffer();
+  return buildCollage(prepared);
 }
 async function upload(buffer, slot) {
   const path = `social-collages/${slot}.jpg`;
@@ -190,9 +187,11 @@ module.exports = async (req, res) => {
     if (!requestedIds.length && manual) {
       const recent = await supabase('oglasi?select=id&odobreno=eq.true&order=created_at.desc&limit=3');
       requestedIds = recent.map(row => Number(row.id));
-      const partial = runs.filter(row => requestedIds.includes(Number(row.oglas_id)) && row.facebook_post_id && !row.instagram_media_id && row.slot_key !== 'queue');
+      const repost = payload.repost === true;
+      const partial = runs.filter(row => requestedIds.includes(Number(row.oglas_id)) && row.slot_key !== 'queue' && (repost || (row.facebook_post_id && !row.instagram_media_id)));
       for (const row of partial) {
-        await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(row.slot_key)}&oglas_id=eq.${row.oglas_id}`, { method: 'PATCH', body: JSON.stringify({ slot_key: 'queue' }) });
+        const reset = repost ? { slot_key: 'queue', facebook_post_id: null, instagram_media_id: null } : { slot_key: 'queue' };
+        await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(row.slot_key)}&oglas_id=eq.${row.oglas_id}`, { method: 'PATCH', body: JSON.stringify(reset) });
       }
     }
     if (requestedIds.length) {
@@ -225,7 +224,7 @@ module.exports = async (req, res) => {
       if (productRows.length) temu = productRows[0];
     }
     const slot = packageKey(local, temu);
-    const collage = await makeCollage(local, temu, slot);
+    const collage = await makeCollage(local, temu);
     const imageUrl = await upload(collage, slot);
     const claimed = await supabase(`social_publish_runs?slot_key=eq.queue&oglas_id=in.(${ids.join(',')})`, { method: 'PATCH', body: JSON.stringify({ slot_key: slot }) });
     if (claimed.length < 3) return res.status(200).json({ ok: true, skipped: true, message: 'Ovaj paket već obrađuje drugi zahtjev.' });

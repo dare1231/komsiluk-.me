@@ -392,6 +392,7 @@
                         <button onclick="pripremiMetaObjavu()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-solid fa-share-nodes mr-1"></i> Pregled objave</button>
                     </div>
                     <button id="meta-publish-now" onclick="objaviMetaSada()" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition"><i class="fa-brands fa-facebook mr-1"></i><i class="fa-brands fa-instagram mr-1"></i> Objavi sada na Facebook i Instagram</button>
+                    <button id="meta-republish-now" onclick="objaviMetaSada(true)" class="w-full bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl shadow-sm transition mt-2"><i class="fa-solid fa-rotate mr-1"></i> Objavi ponovo (zadnji paket, novi dizajn)</button>
                 </div>
 
                 <!-- UPRAVLJANJE OGLASIMA -->
@@ -1482,7 +1483,7 @@
             console.info('[Komsiluk Meta preview]', { localAds: ads, temu });
         }
 
-        async function objaviMetaSada() {
+        async function objaviMetaSada(repost = false) {
             const headers = await authHeaders();
             if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
             const button = document.getElementById('meta-publish-now');
@@ -1492,10 +1493,10 @@
             button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Objavljujem...';
             status.innerText = 'Šaljem kolaž na Facebook i Instagram...';
             try {
-                let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ manual: true }) });
+                let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ manual: true, repost }) });
                 if (response.status === 401) {
                     const refreshedHeaders = await authHeaders(true);
-                    if (refreshedHeaders) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ manual: true }) });
+                    if (refreshedHeaders) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ manual: true, repost }) });
                 }
                 if (response.status === 401) {
                     await supabaseClient.auth.signOut();
