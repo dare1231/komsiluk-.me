@@ -1,6 +1,7 @@
 const sharp = require('sharp');
 const crypto = require('crypto');
 const GRAPH = 'https://graph.facebook.com/v21.0';
+const IG_GRAPH = 'https://graph.instagram.com/v26.0';
 const CAPTION = 'Najnovije na aplikaciji · link u bio';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://revfltrlzwmcyqnquvfa.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FvV47phgUExS5wI';
@@ -48,6 +49,18 @@ async function getInstagramUserId() {
   resolvedInstagramUserId = String(linkedId);
   return resolvedInstagramUserId;
 }
+async function getInstagramLoginUserId(token) {
+  const r = await fetch(`${IG_GRAPH}/me?fields=user_id,username&access_token=${encodeURIComponent(token)}`);
+  const data = await r.json();
+  if (!r.ok || data.error) {
+    const error = data.error || {};
+    const details = [error.type, error.code != null && `code=${error.code}`, error.error_subcode != null && `subcode=${error.error_subcode}`, error.fbtrace_id && `fbtrace_id=${error.fbtrace_id}`].filter(Boolean).join(', ');
+    throw new Error(`${error.message || `Instagram Login lookup ${r.status}`} [/me?fields=user_id,username${details ? `; ${details}` : ''}]`);
+  }
+  const id = data.user_id || data.id;
+  if (!id) throw new Error('Instagram Login token nije vratio Instagram user_id.');
+  return String(id);
+}
 const publicImage = img => img && img.startsWith('http') ? img : `${PUBLIC_SITE_URL}${img || '/assets/neutral-product.svg'}`;
 async function supabase(path, options = {}) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...options, headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(options.headers || {}) } });
@@ -62,6 +75,16 @@ async function graph(path, body, accessToken = '') {
     const error = data.error || {};
     const details = [error.type, error.code != null && `code=${error.code}`, error.error_subcode != null && `subcode=${error.error_subcode}`, error.fbtrace_id && `fbtrace_id=${error.fbtrace_id}`].filter(Boolean).join(', ');
     throw new Error(`${error.message || `Meta Graph API ${r.status}`} [${path}${details ? `; ${details}` : ''}]`);
+  }
+  return data;
+}
+async function instagramGraph(path, body, accessToken) {
+  const r = await fetch(`${IG_GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: accessToken }) });
+  const data = await r.json();
+  if (!r.ok || data.error) {
+    const error = data.error || {};
+    const details = [error.type, error.code != null && `code=${error.code}`, error.error_subcode != null && `subcode=${error.error_subcode}`, error.fbtrace_id && `fbtrace_id=${error.fbtrace_id}`].filter(Boolean).join(', ');
+    throw new Error(`${error.message || `Instagram Graph API ${r.status}`} [${path}${details ? `; ${details}` : ''}]`);
   }
   return data;
 }
@@ -183,14 +206,17 @@ module.exports = async (req, res) => {
       const existingFacebookId = queued.map(row => row.facebook_post_id).find(Boolean);
       fb = existingFacebookId ? { id: existingFacebookId } : await graphPhoto(PAGE_ID, collage, CAPTION);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ facebook_post_id: fb.id || null }) });
-      // This endpoint uses the Instagram API with Facebook Login, which
-      // requires the connected Facebook Page access token. Do not prefer
-      // IG_ACCESS_TOKEN here: that token belongs to the separate Instagram
-      // Login flow and causes "Invalid OAuth access token" on graph.facebook.com.
-      const instagramToken = await getPageToken();
-      const instagramUserId = await getInstagramUserId();
-      const media = await graph(`/${instagramUserId}/media`, { image_url: imageUrl, caption: CAPTION }, instagramToken);
-      ig = await graph(`/${instagramUserId}/media_publish`, { creation_id: media.id }, instagramToken);
+      // Instagram Login does not require the account to be linked to the Facebook Page.
+      if (IG_PUBLISH_TOKEN) {
+        const instagramUserId = await getInstagramLoginUserId(IG_PUBLISH_TOKEN);
+        const media = await instagramGraph(`/${instagramUserId}/media`, { image_url: imageUrl, caption: CAPTION }, IG_PUBLISH_TOKEN);
+        ig = await instagramGraph(`/${instagramUserId}/media_publish`, { creation_id: media.id }, IG_PUBLISH_TOKEN);
+      } else {
+        const instagramToken = await getPageToken();
+        const instagramUserId = await getInstagramUserId();
+        const media = await graph(`/${instagramUserId}/media`, { image_url: imageUrl, caption: CAPTION }, instagramToken);
+        ig = await graph(`/${instagramUserId}/media_publish`, { creation_id: media.id }, instagramToken);
+      }
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ instagram_media_id: ig.id || null }) });
     } catch (error) {
       if (!fb) {
