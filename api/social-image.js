@@ -5,8 +5,13 @@ module.exports = async (req, res) => {
   const slot = String(req.query?.slot || '');
   if (!/^pkg-[a-f0-9]{24}$/.test(slot)) return res.status(400).send('Invalid image slot');
 
-  const source = `${SUPABASE_URL}/storage/v1/object/public/oglasi-slike/social-collages/${slot}.jpg`;
-  const response = await fetch(source);
+  const source = `${SUPABASE_URL}/storage/v1/object/oglasi-slike/social-collages/${slot}.jpg`;
+  const headers = {};
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    headers.apikey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    headers.Authorization = `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
+  }
+  const response = await fetch(source, { headers });
   if (!response.ok) return res.status(response.status).send('Image not found');
 
   const body = Buffer.from(await response.arrayBuffer());
