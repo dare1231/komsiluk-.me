@@ -701,7 +701,8 @@
     <script>
         const SUPABASE_URL = 'https://revfltrlzwmcyqnquvfa.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FvV47phgUExS5wI';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'komsiluk-auth' } });
+        supabaseClient.auth.onAuthStateChange((_event, session) => { panelOtklucan = !!session; });
 
         const FALLBACK_SLIKA = 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=60';
 
@@ -1381,6 +1382,8 @@
             const { error } = await supabaseClient.auth.signInWithPassword({ email, password: lozinka });
             dugme.disabled = false; dugme.innerText = 'Prijavi se';
             if (error) { toast('Prijava neuspešna: ' + error.message, 'err'); return; }
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            if (!sessionData.session) { toast('Prijava nije sačuvana u browseru. Dozvoli cookies/local storage i pokušaj ponovo.', 'err'); return; }
             panelOtklucan = true;
             zatvoriSifru();
             promeniTab('panel');
