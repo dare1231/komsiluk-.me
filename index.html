@@ -800,6 +800,7 @@
         let izabraniRadijus = 'sve'; // Pri svakom novom otvaranju prikaži oglase iz cijelog grada.
         let trenutniPrikaz = localStorage.getItem('kus_prikaz') || 'mapa';
         let panelOtklucan = false;
+        let adminAccessToken = null;
         let jePoklanjam = false;
         let pretraga = '';
         let kategorija = 'sve';
@@ -1379,11 +1380,12 @@
             if (!email || !lozinka) { toast('Unesite email i lozinku.', 'err'); return; }
             let dugme = document.getElementById('dugme-potvrdi-prijavu');
             dugme.disabled = true; dugme.innerText = 'Prijavljujem...';
-            const { error } = await supabaseClient.auth.signInWithPassword({ email, password: lozinka });
+            const { data: loginData, error } = await supabaseClient.auth.signInWithPassword({ email, password: lozinka });
             dugme.disabled = false; dugme.innerText = 'Prijavi se';
             if (error) { toast('Prijava neuspešna: ' + error.message, 'err'); return; }
+            adminAccessToken = loginData.session?.access_token || null;
             const { data: sessionData } = await supabaseClient.auth.getSession();
-            if (!sessionData.session) { toast('Prijava nije sačuvana u browseru. Dozvoli cookies/local storage i pokušaj ponovo.', 'err'); return; }
+            if (!sessionData.session && !adminAccessToken) { toast('Prijava nije uspjela. Pokušaj ponovo.', 'err'); return; }
             panelOtklucan = true;
             zatvoriSifru();
             promeniTab('panel');
@@ -1392,6 +1394,7 @@
 
         async function odjaviSeIzPanela() {
             await supabaseClient.auth.signOut();
+            adminAccessToken = null;
             panelOtklucan = false;
             promeniTab('home');
             toast('Odjavljeni ste.', 'info');
@@ -1403,7 +1406,8 @@
                 const refreshed = await supabaseClient.auth.refreshSession();
                 data = refreshed.data;
             }
-            return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' } : null;
+            const accessToken = data.session?.access_token || adminAccessToken;
+            return accessToken ? { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } : null;
         }
 
         async function objaviMetaAutomatski(newAdIds = [], notify = false) {
