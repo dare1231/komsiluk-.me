@@ -40,6 +40,15 @@ async function graph(path, body) {
   const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: await getPageToken() }) });
   const data = await r.json(); if (!r.ok || data.error) throw new Error(data.error?.message || `Meta Graph API ${r.status}`); return data;
 }
+async function graphPhoto(pageId, buffer, caption) {
+  const form = new FormData();
+  form.append('source', new Blob([buffer], { type: 'image/jpeg' }), 'komsiluk.jpg');
+  form.append('caption', caption);
+  form.append('published', 'true');
+  form.append('access_token', await getPageToken());
+  const r = await fetch(`${GRAPH}/${pageId}/photos`, { method: 'POST', body: form });
+  const data = await r.json(); if (!r.ok || data.error) throw new Error(data.error?.message || `Meta Graph API ${r.status}`); return data;
+}
 const esc = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 async function download(url) { const r = await fetch(url); if (!r.ok) throw new Error(`Slika nije dostupna: ${r.status}`); return Buffer.from(await r.arrayBuffer()); }
 async function makeCollage(localAds, temu, slot) {
@@ -137,7 +146,7 @@ module.exports = async (req, res) => {
     if (claimed.length < 3) return res.status(200).json({ ok: true, skipped: true, message: 'Ovaj paket već obrađuje drugi zahtjev.' });
     let fb = null, ig = null;
     try {
-      fb = await graph(`/${PAGE_ID}/photos`, { url: imageUrl, caption: CAPTION, published: 'true' });
+      fb = await graphPhoto(PAGE_ID, collage, CAPTION);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ facebook_post_id: fb.id || null }) });
       const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
       ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
