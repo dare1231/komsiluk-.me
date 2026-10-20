@@ -132,9 +132,25 @@ async function upload(buffer, slot) {
   // Supabase returns a path relative to /storage/v1 (e.g. /object/sign/bucket/file.jpg?token=...).
   // Without the /storage/v1 prefix the URL returns a JSON 404 and Instagram rejects it (code 9004 / 2207052).
   const signedPath = signedData.signedURL;
-  if (signedPath.startsWith('http')) return signedPath;
-  const withPrefix = signedPath.startsWith('/storage/v1') ? signedPath : `/storage/v1${signedPath.startsWith('/') ? '' : '/'}${signedPath}`;
-  return `${SUPABASE_URL}${withPrefix}`;
+  let signedUrl;
+  if (signedPath.startsWith('http')) signedUrl = signedPath;
+  else {
+    const withPrefix = signedPath.startsWith('/storage/v1') ? signedPath : `/storage/v1${signedPath.startsWith('/') ? '' : '/'}${signedPath}`;
+    signedUrl = `${SUPABASE_URL}${withPrefix}`;
+  }
+  // Verify what Instagram will actually fetch: it must be a direct, anonymous JPEG response.
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/oglasi-slike/${path}`;
+  const problems = [];
+  for (const candidate of [signedUrl, publicUrl]) {
+    try {
+      const check = await fetch(candidate, { redirect: 'follow' });
+      const type = check.headers.get('content-type') || '';
+      const size = Number(check.headers.get('content-length') || 0);
+      if (check.ok && /^image\/jpe?g/i.test(type)) { await check.arrayBuffer().catch(() => {}); return candidate; }
+      problems.push(`${candidate === signedUrl ? 'signed' : 'public'}: HTTP ${check.status}, ${type || 'bez content-type'}${size ? `, ${size}B` : ''}`);
+    } catch (error) { problems.push(`${candidate === signedUrl ? 'signed' : 'public'}: ${error.message}`); }
+  }
+  throw new Error(`Kolaž nije javno dostupan kao JPEG za Instagram (${problems.join(' | ')}). Provjeri da bucket oglasi-slike postoji i da je Public.`);
 }
 function packageKey(local, temu) {
   const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
