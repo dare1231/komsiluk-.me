@@ -1,8 +1,9 @@
 const GRAPH = 'https://graph.facebook.com/v21.0';
-const ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FV47phgUExS5wI';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://revfltrlzwmcyqnquvfa.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FV47phgUExS5wI';
 
 async function supabase(path, options = {}) {
-  const response = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${path}`, {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
     headers: {
       apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -21,8 +22,8 @@ async function supabase(path, options = {}) {
 
 async function authenticatedUser(req) {
   const auth = req.headers.authorization || '';
-  if (!auth.startsWith('Bearer ') || !process.env.SUPABASE_URL || !ANON_KEY) return null;
-  const response = await fetch(`${process.env.SUPABASE_URL}/auth/v1/user`, {
+  if (!auth.startsWith('Bearer ') || !ANON_KEY) return null;
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { apikey: ANON_KEY, Authorization: auth },
   });
   if (!response.ok) return null;
@@ -55,7 +56,7 @@ async function readProduct(link, index) {
 
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Supabase varijable nijesu podešene.' });
+  if (!SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Supabase varijable nijesu podešene.' });
   if (!(await authenticatedUser(req))) return res.status(401).json({ error: 'Prijavite se u admin panel.' });
   try {
     if (req.method === 'GET') {
