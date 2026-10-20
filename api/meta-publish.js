@@ -3,10 +3,11 @@ const crypto = require('crypto');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const CAPTION = 'Najnovije na aplikaciji · link u bio';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://revfltrlzwmcyqnquvfa.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FvV47phgUExS5wI';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwiaWF0IjoxNzg4ODA1MDQ2LCJleHAiOjIxMDQzODEwNDZ9.f0xKPTOaeecm3OFNtO3qfdduDHf-V47phgUExS5wI';
 const PUBLIC_SITE_URL = process.env.PUBLIC_SITE_URL || '';
 const PAGE_ID = process.env.FB_PAGE_ID || process.env.META_PAGE_ID || '';
-const PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN;
+const IG_PUBLISH_TOKEN = process.env.IG_ACCESS_TOKEN || process.env.IG_TOKEN || '';
+const PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || IG_PUBLISH_TOKEN;
 const IG_USER_ID = process.env.IG_USER_ID || process.env.META_IG_USER_ID || process.env.IG_ID;
 const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
@@ -37,8 +38,9 @@ async function supabase(path, options = {}) {
   const text = await r.text(); let data; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!r.ok) throw new Error(data?.message || text || `Supabase ${r.status}`); return data;
 }
-async function graph(path, body) {
-  const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: await getPageToken() }) });
+async function graph(path, body, accessToken = '') {
+  const token = accessToken || await getPageToken();
+  const r = await fetch(`${GRAPH}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...body, access_token: token }) });
   const data = await r.json(); if (!r.ok || data.error) throw new Error(data.error?.message || `Meta Graph API ${r.status}`); return data;
 }
 async function graphPhoto(pageId, buffer, caption) {
@@ -153,8 +155,9 @@ module.exports = async (req, res) => {
       const existingFacebookId = queued.map(row => row.facebook_post_id).find(Boolean);
       fb = existingFacebookId ? { id: existingFacebookId } : await graphPhoto(PAGE_ID, collage, CAPTION);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ facebook_post_id: fb.id || null }) });
-      const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
-      ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
+      const instagramToken = IG_PUBLISH_TOKEN || await getPageToken();
+      const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION }, instagramToken);
+      ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id }, instagramToken);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ instagram_media_id: ig.id || null }) });
     } catch (error) {
       if (!fb) {
