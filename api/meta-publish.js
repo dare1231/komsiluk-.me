@@ -129,7 +129,12 @@ async function upload(buffer, slot) {
   const signedData = await signed.json();
   if (!signed.ok || !signedData.signedURL) throw new Error(`Ne mogu napraviti signed URL za kolaž (${signed.status}).`);
   // Meta receives a time-limited direct JPEG URL, without Vercel or bucket auth.
-  return signedData.signedURL.startsWith('http') ? signedData.signedURL : `${SUPABASE_URL}${signedData.signedURL}`;
+  // Supabase returns a path relative to /storage/v1 (e.g. /object/sign/bucket/file.jpg?token=...).
+  // Without the /storage/v1 prefix the URL returns a JSON 404 and Instagram rejects it (code 9004 / 2207052).
+  const signedPath = signedData.signedURL;
+  if (signedPath.startsWith('http')) return signedPath;
+  const withPrefix = signedPath.startsWith('/storage/v1') ? signedPath : `/storage/v1${signedPath.startsWith('/') ? '' : '/'}${signedPath}`;
+  return `${SUPABASE_URL}${withPrefix}`;
 }
 function packageKey(local, temu) {
   const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
