@@ -10,6 +10,7 @@ const PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || process.env.META_P
 const IG_USER_ID = process.env.IG_USER_ID || process.env.META_IG_USER_ID || process.env.IG_ID;
 const PUBLISH_TOKEN = process.env.META_PUBLISH_TOKEN || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
+const COLLAGE_FONT = 'DejaVu Sans';
 let resolvedPageToken = null;
 async function isSupabaseUserToken(token) {
   if (!token) return false;
@@ -59,8 +60,8 @@ async function makeCollage(localAds, temu, slot) {
     const resized = await sharp(await download(publicImage(items[i].img || items[i].image_url))).resize(cardW, cardH, { fit: 'cover' }).jpeg({ quality: 90 }).toBuffer();
     layers.push({ input: resized, left: (i % 2) * 540 + 10, top: Math.floor(i / 2) * 390 + startY });
   }
-  const labels = items.map((o, i) => { const x = (i % 2) * 540 + 24, y = Math.floor(i / 2) * 390 + startY; return `<text x="${x}" y="${y + 332}" fill="#0f172a" font-family="Arial" font-size="24" font-weight="700">${esc(String(o.naziv || o.name).slice(0, 34))}</text><text x="${x}" y="${y + 360}" fill="#475569" font-family="Arial" font-size="19">${esc(String(o.mjesto || '').slice(0, 44))}</text>`; }).join('');
-  const header = Buffer.from(`<svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg"><rect width="1080" height="1080" fill="#f8fafc"/><rect width="1080" height="155" fill="#0f766e"/><text x="54" y="70" fill="white" font-family="Arial" font-size="39" font-weight="700">Najnovije na aplikaciji</text><text x="54" y="119" fill="#d1fae5" font-family="Arial" font-size="25">4 proizvoda · link u bio</text>${labels}</svg>`);
+  const labels = items.map((o, i) => { const x = (i % 2) * 540 + 24, y = Math.floor(i / 2) * 390 + startY; return `<text x="${x}" y="${y + 332}" fill="#0f172a" font-family="${COLLAGE_FONT}" font-size="24" font-weight="700">${esc(String(o.naziv || o.name).slice(0, 34))}</text><text x="${x}" y="${y + 360}" fill="#475569" font-family="${COLLAGE_FONT}" font-size="19">${esc(String(o.mjesto || '').slice(0, 44))}</text>`; }).join('');
+  const header = Buffer.from(`<svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg"><rect width="1080" height="1080" fill="#f8fafc"/><rect width="1080" height="155" fill="#0f766e"/><text x="54" y="70" fill="white" font-family="${COLLAGE_FONT}" font-size="39" font-weight="700">Najnovije na aplikaciji</text><text x="54" y="119" fill="#d1fae5" font-family="${COLLAGE_FONT}" font-size="25">4 proizvoda · link u bio</text>${labels}</svg>`);
   return sharp({ create: { width: 1080, height: 1080, channels: 4, background: '#f8fafc' } }).composite([{ input: header }, ...layers]).jpeg({ quality: 90 }).toBuffer();
 }
 async function upload(buffer, slot) {
