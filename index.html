@@ -1493,6 +1493,12 @@
                     const refreshedHeaders = await authHeaders(true);
                     if (refreshedHeaders) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ manual: true }) });
                 }
+                if (response.status === 401 || response.status === 403) {
+                    await supabaseClient.auth.signOut();
+                    adminAccessToken = null;
+                    panelOtklucan = false;
+                    throw new Error('Sesija je istekla. Prijavi se ponovo u kontrolnom panelu.');
+                }
                 const body = await response.json();
                 if (!response.ok) throw new Error(body.error || 'Objava nije uspjela.');
                 if (body.published) {
