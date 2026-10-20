@@ -702,7 +702,10 @@
         const SUPABASE_URL = 'https://revfltrlzwmcyqnquvfa.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJldmZsdHJsendtY3lxbnF1dmZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MDUwNDYsImV4cCI6MjEwNDM4MTA0Nn0.f0xKPTOaeecm3OFNtO3qfdduDHf-FvV47phgUExS5wI';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-        supabaseClient.auth.onAuthStateChange((_event, session) => { panelOtklucan = !!session; });
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+            panelOtklucan = !!session;
+            adminAccessToken = session?.access_token || null;
+        });
 
         const FALLBACK_SLIKA = 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=60';
 
@@ -1400,13 +1403,15 @@
             toast('Odjavljeni ste.', 'info');
         }
 
-        async function authHeaders() {
+        async function authHeaders(forceRefresh = false) {
             let { data } = await supabaseClient.auth.getSession();
-            if (!data.session) {
+            const expiresSoon = data.session?.expires_at && data.session.expires_at * 1000 < Date.now() + 60_000;
+            if (forceRefresh || !data.session || expiresSoon) {
                 const refreshed = await supabaseClient.auth.refreshSession();
-                data = refreshed.data;
+                if (refreshed.data?.session) data = refreshed.data;
             }
             const accessToken = data.session?.access_token || adminAccessToken;
+            if (data.session?.access_token) adminAccessToken = data.session.access_token;
             return accessToken ? { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } : null;
         }
 
@@ -1483,7 +1488,11 @@
             button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Objavljujem...';
             status.innerText = 'Šaljem kolaž na Facebook i Instagram...';
             try {
-                const response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ manual: true }) });
+                let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ manual: true }) });
+                if (response.status === 401 || response.status === 403) {
+                    const refreshedHeaders = await authHeaders(true);
+                    if (refreshedHeaders) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ manual: true }) });
+                }
                 const body = await response.json();
                 if (!response.ok) throw new Error(body.error || 'Objava nije uspjela.');
                 if (body.published) {
