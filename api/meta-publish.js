@@ -91,7 +91,7 @@ module.exports = async (req, res) => {
     const manual = payload.manual === true;
     if (process.env.AUTO_SOCIAL_PUBLISH === 'false' && !manual) return res.status(200).json({ ok: true, skipped: true, message: 'Automatska objava je isključena.' });
     let runs = [];
-    try { runs = await supabase('social_publish_runs?select=oglas_id,slot_key&limit=10000'); }
+    try { runs = await supabase('social_publish_runs?select=oglas_id,slot_key,facebook_post_id,instagram_media_id&limit=10000'); }
     catch (error) {
       if (String(error.message).includes('social_publish_runs')) return res.status(500).json({ error: 'Nedostaje tabela social_publish_runs; pokreni temu-products.sql u Supabase-u.' });
       throw error;
@@ -109,6 +109,10 @@ module.exports = async (req, res) => {
     if (!requestedIds.length && manual) {
       const recent = await supabase('oglasi?select=id&odobreno=eq.true&order=created_at.desc&limit=3');
       requestedIds = recent.map(row => Number(row.id));
+      const partial = runs.filter(row => requestedIds.includes(Number(row.oglas_id)) && row.facebook_post_id && !row.instagram_media_id && row.slot_key !== 'queue');
+      for (const row of partial) {
+        await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(row.slot_key)}&oglas_id=eq.${row.oglas_id}`, { method: 'PATCH', body: JSON.stringify({ slot_key: 'queue' }) });
+      }
     }
     if (requestedIds.length) {
       const approved = await supabase(`oglasi?select=id&odobreno=eq.true&id=in.(${requestedIds.join(',')})`);
@@ -122,7 +126,7 @@ module.exports = async (req, res) => {
         }
       }
     }
-    const queued = await supabase('social_publish_runs?select=oglas_id,temu_product_id&slot_key=eq.queue&order=created_at.asc&limit=3');
+    const queued = await supabase('social_publish_runs?select=oglas_id,temu_product_id,facebook_post_id,instagram_media_id&slot_key=eq.queue&order=created_at.asc&limit=3');
     if (queued.length < 3) return res.status(200).json({ ok: true, skipped: true, pending_ads: queued.length, required_ads: 3, message: `Čeka se još ${3 - queued.length} odobrena lokalna oglasa za paket.` });
     const ids = queued.map(row => Number(row.oglas_id));
     const ads = await supabase(`oglasi?select=*&odobreno=eq.true&id=in.(${ids.join(',')})`);
@@ -146,7 +150,8 @@ module.exports = async (req, res) => {
     if (claimed.length < 3) return res.status(200).json({ ok: true, skipped: true, message: 'Ovaj paket već obrađuje drugi zahtjev.' });
     let fb = null, ig = null;
     try {
-      fb = await graphPhoto(PAGE_ID, collage, CAPTION);
+      const existingFacebookId = queued.map(row => row.facebook_post_id).find(Boolean);
+      fb = existingFacebookId ? { id: existingFacebookId } : await graphPhoto(PAGE_ID, collage, CAPTION);
       await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(slot)}`, { method: 'PATCH', body: JSON.stringify({ facebook_post_id: fb.id || null }) });
       const media = await graph(`/${IG_USER_ID}/media`, { image_url: imageUrl, caption: CAPTION });
       ig = await graph(`/${IG_USER_ID}/media_publish`, { creation_id: media.id });
