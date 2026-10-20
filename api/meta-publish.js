@@ -169,7 +169,7 @@ module.exports = async (req, res) => {
     const manual = payload.manual === true;
     if (process.env.AUTO_SOCIAL_PUBLISH === 'false' && !manual) return res.status(200).json({ ok: true, skipped: true, message: 'Automatska objava je isključena.' });
     let runs = [];
-    try { runs = await supabase('social_publish_runs?select=oglas_id,slot_key,facebook_post_id,instagram_media_id&limit=10000'); }
+    try { runs = await supabase('social_publish_runs?select=oglas_id,slot_key,facebook_post_id,instagram_media_id,created_at&limit=10000'); }
     catch (error) {
       if (String(error.message).includes('social_publish_runs')) return res.status(500).json({ error: 'Nedostaje tabela social_publish_runs; pokreni temu-products.sql u Supabase-u.' });
       throw error;
@@ -192,6 +192,16 @@ module.exports = async (req, res) => {
       for (const row of partial) {
         const reset = repost ? { slot_key: 'queue', facebook_post_id: null, instagram_media_id: null } : { slot_key: 'queue' };
         await supabase(`social_publish_runs?slot_key=eq.${encodeURIComponent(row.slot_key)}&oglas_id=eq.${row.oglas_id}`, { method: 'PATCH', body: JSON.stringify(reset) });
+      }
+    }
+    if (payload.repost !== true) {
+      // Self-healing: queue every approved ad newer than the last package, even if the browser never reported it.
+      const lastRunAt = runs.map(row => row.created_at).filter(Boolean).sort().pop();
+      if (lastRunAt) {
+        try {
+          const fresh = await supabase(`oglasi?select=id&odobreno=eq.true&created_at=gt.${encodeURIComponent(lastRunAt)}&order=created_at.asc&limit=30`);
+          requestedIds = [...new Set([...requestedIds, ...fresh.map(row => Number(row.id)).filter(id => Number.isSafeInteger(id) && id > 0)])];
+        } catch (error) { console.error('[Meta discover]', error.message); }
       }
     }
     if (requestedIds.length) {

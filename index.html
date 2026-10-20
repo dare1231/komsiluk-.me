@@ -1420,7 +1420,11 @@
             const headers = await authHeaders();
             if (!headers || !newAdIds.length) return;
             try {
-                const response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ new_ad_ids: newAdIds }) });
+                let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ new_ad_ids: newAdIds }) });
+                if (response.status === 401) {
+                    const refreshed = await authHeaders(true);
+                    if (refreshed) response = await fetch('/api/meta-publish', { method: 'POST', headers: refreshed, body: JSON.stringify({ new_ad_ids: newAdIds }) });
+                }
                 const body = await response.json();
                 if (!response.ok) throw new Error(body.error || 'Automatska objava nije uspjela.');
                 if (body.published) toast('Paket od 3 oglasa i 1 Temu proizvoda objavljen je na Facebooku i Instagramu.', 'ok');
