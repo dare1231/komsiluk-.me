@@ -121,9 +121,8 @@ async function upload(buffer, slot) {
   const path = `social-collages/${slot}.jpg`;
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/oglasi-slike/${path}`, { method: 'POST', headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' }, body: buffer });
   if (!r.ok) throw new Error(`Ne mogu sačuvati kolaž (${r.status}).`);
-  // Instagram mora sam da preuzme sliku; stabilni javni URL je pouzdaniji od
-  // privremenog signed URL-a i provereno je dostupan Meta crawleru.
-  return `${SUPABASE_URL}/storage/v1/object/public/oglasi-slike/${path}`;
+  // Meta must receive a direct public JPEG response with no storage redirect.
+  return `${PUBLIC_SITE_URL}/api/social-image?slot=${encodeURIComponent(slot)}`;
 }
 function packageKey(local, temu) {
   const signature = `${local.map(o => o.id).join(',')}|${temu.id || 0}`;
