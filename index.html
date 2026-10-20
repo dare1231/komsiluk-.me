@@ -1395,7 +1395,11 @@
         }
 
         async function authHeaders() {
-            const { data } = await supabaseClient.auth.getSession();
+            let { data } = await supabaseClient.auth.getSession();
+            if (!data.session) {
+                const refreshed = await supabaseClient.auth.refreshSession();
+                data = refreshed.data;
+            }
             return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' } : null;
         }
 
