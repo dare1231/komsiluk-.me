@@ -384,11 +384,38 @@
                         <h4 class="text-xs font-extrabold text-orange-900"><i class="fa-solid fa-bag-shopping text-orange-500 mr-1.5"></i> 3 Temu linka za danas</h4>
                         <span class="text-[9px] bg-orange-200 text-orange-900 px-2 py-0.5 rounded font-bold">DNEVNI PAKET</span>
                     </div>
-                    <p class="text-[10px] text-orange-800">Unesi tri proizvoda. Aplikacija će pokušati preuzeti naziv, sliku i cijenu, pa ih spojiti sa 3 najnovija lokalna oglasa.</p>
+                    <p class="text-[10px] text-orange-800">Unesi tri proizvoda: link, cijenu i sliku. Naziv se sam prevodi na crnogorski (ili ga upiši ručno). Cijena i slika se vide u kolažu sa 3 oglasa.</p>
                     <div class="space-y-2">
-                        <input id="temu-link-1" type="url" placeholder="1. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
-                        <input id="temu-link-2" type="url" placeholder="2. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
-                        <input id="temu-link-3" type="url" placeholder="3. Temu link" class="w-full bg-white border border-orange-200 p-2.5 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500 shadow-sm">
+                        <div class="bg-white/70 border border-orange-200 rounded-2xl p-2.5 space-y-1.5">
+                            <input id="temu-link-1" type="url" placeholder="1. Temu link" class="w-full bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                            <input id="temu-naziv-1" type="text" placeholder="Naziv na crnogorskom (prazno = prevodi sam)" class="w-full bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                            <div class="flex items-center space-x-2">
+                                <input id="temu-cijena-1" type="text" inputmode="decimal" placeholder="Cijena u € (npr. 12,50)" class="flex-1 bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                                <label class="flex-shrink-0 bg-orange-100 text-orange-900 text-[11px] font-bold px-3 py-2 rounded-xl cursor-pointer">📷 Slika<input type="file" accept="image/*" class="hidden" onchange="temuIzaberiSliku(1, this)"></label>
+                                <img id="temu-slika-prev-1" class="hidden w-9 h-9 rounded-lg object-cover border border-orange-200" alt="">
+                            </div>
+                            <input id="temu-slika-1" type="hidden">
+                        </div>
+                        <div class="bg-white/70 border border-orange-200 rounded-2xl p-2.5 space-y-1.5">
+                            <input id="temu-link-2" type="url" placeholder="2. Temu link" class="w-full bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                            <input id="temu-naziv-2" type="text" placeholder="Naziv na crnogorskom (prazno = prevodi sam)" class="w-full bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                            <div class="flex items-center space-x-2">
+                                <input id="temu-cijena-2" type="text" inputmode="decimal" placeholder="Cijena u € (npr. 12,50)" class="flex-1 bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                                <label class="flex-shrink-0 bg-orange-100 text-orange-900 text-[11px] font-bold px-3 py-2 rounded-xl cursor-pointer">📷 Slika<input type="file" accept="image/*" class="hidden" onchange="temuIzaberiSliku(2, this)"></label>
+                                <img id="temu-slika-prev-2" class="hidden w-9 h-9 rounded-lg object-cover border border-orange-200" alt="">
+                            </div>
+                            <input id="temu-slika-2" type="hidden">
+                        </div>
+                        <div class="bg-white/70 border border-orange-200 rounded-2xl p-2.5 space-y-1.5">
+                            <input id="temu-link-3" type="url" placeholder="3. Temu link" class="w-full bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                            <input id="temu-naziv-3" type="text" placeholder="Naziv na crnogorskom (prazno = prevodi sam)" class="w-full bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                            <div class="flex items-center space-x-2">
+                                <input id="temu-cijena-3" type="text" inputmode="decimal" placeholder="Cijena u € (npr. 12,50)" class="flex-1 bg-white border border-orange-200 p-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-orange-500">
+                                <label class="flex-shrink-0 bg-orange-100 text-orange-900 text-[11px] font-bold px-3 py-2 rounded-xl cursor-pointer">📷 Slika<input type="file" accept="image/*" class="hidden" onchange="temuIzaberiSliku(3, this)"></label>
+                                <img id="temu-slika-prev-3" class="hidden w-9 h-9 rounded-lg object-cover border border-orange-200" alt="">
+                            </div>
+                            <input id="temu-slika-3" type="hidden">
+                        </div>
                     </div>
                     <div id="temu-paket-status" class="text-[10px] text-slate-500">Paket još nije učitan.</div>
                     <div class="grid grid-cols-2 gap-2">
@@ -1543,29 +1570,46 @@
                 const body = await response.json();
                 if (!response.ok) throw new Error(body.error || 'Greška pri učitavanju.');
                 (body.products || []).slice(0, 3).forEach((p, i) => {
-                    const input = document.getElementById(`temu-link-${i + 1}`);
-                    if (input) input.value = p.affiliate_url || '';
+                    const k = i + 1;
+                    const set = (id, v) => { const el = document.getElementById(id + '-' + k); if (el) el.value = v || ''; };
+                    set('temu-link', p.affiliate_url); set('temu-naziv', p.naziv); set('temu-cijena', p.cijena); set('temu-slika', p.image_url);
+                    const prev = document.getElementById('temu-slika-prev-' + k);
+                    if (prev && p.image_url) { prev.src = p.image_url; prev.classList.remove('hidden'); }
                 });
                 status.innerText = body.products?.length ? `${body.products.length} Temu proizvoda je učitano.` : 'Paket još nije učitan.';
             } catch (error) { status.innerText = error.message; }
         }
 
+        async function temuIzaberiSliku(i, input) {
+            const f = input.files && input.files[0];
+            if (!f) return;
+            toast('Otpremam sliku...', 'info');
+            const url = await otpremiSlikuUStorage(f);
+            if (!url) { toast('Slika nije otpremljena.', 'err'); return; }
+            document.getElementById('temu-slika-' + i).value = url;
+            const prev = document.getElementById('temu-slika-prev-' + i);
+            prev.src = url; prev.classList.remove('hidden');
+            toast('Slika dodata ✔', 'ok');
+        }
+
         async function sacuvajTemuPaket() {
-            const links = [1, 2, 3].map(i => document.getElementById(`temu-link-${i}`).value.trim());
-            if (links.some(link => !link)) { toast('Unesi sva tri Temu linka.', 'err'); return; }
+            const val = (id, i) => (document.getElementById(`${id}-${i}`)?.value || '').trim();
+            const items = [1, 2, 3].map(i => ({ link: val('temu-link', i), naziv: val('temu-naziv', i), cijena: val('temu-cijena', i), image_url: val('temu-slika', i) }));
+            if (items.some(it => !it.link)) { toast('Unesi sva tri Temu linka.', 'err'); return; }
             const headers = await authHeaders();
             if (!headers) { toast('Prvo se prijavi u panel.', 'err'); return; }
             const status = document.getElementById('temu-paket-status');
             status.innerText = 'Učitavam podatke sa Temua...';
             try {
-                let response = await fetch('/api/temu-products', { method: 'POST', headers, body: JSON.stringify({ links }) });
+                let response = await fetch('/api/temu-products', { method: 'POST', headers, body: JSON.stringify({ items }) });
                 if (response.status === 401) {
                     const refreshedHeaders = await authHeaders(true);
-                    if (refreshedHeaders) response = await fetch('/api/temu-products', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ links }) });
+                    if (refreshedHeaders) response = await fetch('/api/temu-products', { method: 'POST', headers: refreshedHeaders, body: JSON.stringify({ items }) });
                 }
                 const body = await response.json();
                 if (!response.ok) throw new Error(body.error || 'Paket nije sačuvan.');
                 status.innerText = 'Paket je sačuvan i spreman za objavu.';
+                ucitajTemuPaket();
                 toast('Tri Temu proizvoda su sačuvana.', 'ok');
             } catch (error) { status.innerText = error.message; toast(error.message, 'err'); }
         }
