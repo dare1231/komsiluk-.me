@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#10b981">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/assets/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="description" content="Komšiluk.me — kupi, prodaj i pokloni u svom kraju. Besplatni lokalni oglasi za Podgoricu i cijelu Crnu Goru.">
     <meta property="og:title" content="Komšiluk.me — oglasi iz tvog kraja">
     <meta property="og:description" content="Pronađi kupca ili dobru ponudu u komšiluku. Objavi oglas besplatno za 30 sekundi.">
@@ -480,6 +484,10 @@
                 <div class="bg-amber-50/70 border border-amber-200/60 p-3 rounded-2xl space-y-2">
                     <p class="text-xs text-amber-900 font-bold">Lokacija: <span id="modal-lokacija-prodavca" class="text-slate-900">Podgorica, Blok 5</span></p>
                     <p id="modal-prodavac-red" class="text-xs text-slate-500 font-semibold mt-1 hidden">Postavio/la: <span id="modal-prodavac-nadimak" class="text-slate-800 font-bold"></span> <span id="modal-prodavac-poeni" class="bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-md text-[10px] ml-1"></span></p>
+                    <div id="modal-msg-wrapper" class="hidden grid grid-cols-2 gap-2">
+                        <a id="modal-wa-link" href="#" target="_blank" rel="noopener" class="flex items-center justify-center space-x-1.5 bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition"><i class="fa-brands fa-whatsapp"></i><span>WhatsApp</span></a>
+                        <a id="modal-viber-link" href="#" class="flex items-center justify-center space-x-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition"><i class="fa-brands fa-viber"></i><span>Viber</span></a>
+                    </div>
                     <div id="modal-tel-wrapper">
                         <a id="modal-tel-link" href="#" class="flex items-center justify-center space-x-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition">
                             <i class="fa-solid fa-phone"></i><span id="modal-tel-tekst">Pozovi prodavca</span>
@@ -488,6 +496,16 @@
                     <a id="modal-fb-link" href="#" target="_blank" rel="noopener" class="hidden items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition">
                         <i class="fa-brands fa-facebook"></i><span>Originalni FB oglas (za tebe)</span>
                     </a>
+                </div>
+
+                <div class="bg-sky-50 border border-sky-200 rounded-2xl p-3 text-[11px] text-sky-900 leading-snug">
+                    <p class="font-extrabold mb-1"><i class="fa-solid fa-shield-halved mr-1"></i>Sigurna kupovina</p>
+                    Nađite se na javnom mjestu, pregledajte predmet prije plaćanja i nikad ne šaljite novac unaprijed nepoznatoj osobi.
+                </div>
+
+                <div id="slicni-wrapper" class="hidden space-y-2">
+                    <p class="text-xs font-bold text-slate-700"><i class="fa-solid fa-layer-group text-brand-500 mr-1"></i> Slični oglasi</p>
+                    <div id="slicni-lista" class="flex space-x-2 overflow-x-auto no-scrollbar pb-1"></div>
                 </div>
 
                 <div class="space-y-2 pt-1">
@@ -1004,11 +1022,36 @@
         const KATEGORIJE = [
             { id: 'sve', ikona: 'fa-border-all', label: 'Sve' },
             { id: 'poklanjam', ikona: 'fa-gift', label: 'Pokloni' },
+            { id: 'vozila', ikona: 'fa-car', label: 'Vozila' },
+            { id: 'telefoni', ikona: 'fa-mobile-screen', label: 'Telefoni' },
+            { id: 'elektronika', ikona: 'fa-tv', label: 'Elektronika' },
+            { id: 'dom', ikona: 'fa-couch', label: 'Dom i bašta' },
+            { id: 'odjeca', ikona: 'fa-shirt', label: 'Odjeća' },
+            { id: 'bebe', ikona: 'fa-baby', label: 'Bebe i djeca' },
+            { id: 'alati', ikona: 'fa-screwdriver-wrench', label: 'Alati' },
+            { id: 'sport', ikona: 'fa-bicycle', label: 'Sport' },
             { id: 'do20', ikona: 'fa-tag', label: 'Do 20 €' },
             { id: 'od20do50', ikona: 'fa-tags', label: '20–50 €' },
             { id: 'preko50', ikona: 'fa-gem', label: 'Preko 50 €' },
             { id: 'omiljeno', ikona: 'fa-heart', label: 'Omiljeni' }
         ];
+
+        // Kategorije se prepoznaju iz naziva oglasa (ne treba nova kolona u bazi)
+        const TEMA_RE = {
+            vozila: /auto|automobil|golf|opel|audi|bmw|mercedes|passat|fiat|renault|peugeot|škoda|skoda|motor|skuter|moped|guma|gume|felge|trotinet|prikolica|kamion|vozilo|traktor/i,
+            telefoni: /telefon|iphone|samsung|xiaomi|huawei|redmi|pixel|oneplus|mobitel|smartphone|galaxy|pametan sat|smart watch|sat\b|slušalice|airpods|punjač/i,
+            elektronika: /tv\b|televizor|laptop|računar|racunar|monitor|konzola|playstation|ps4|ps5|xbox|kamera|tablet|ipad|router|printer|zvučnik|frižider|frizider|veš mašina|mašina za veš|šporet|sporet|klima|aspirator|mikser|blender|fen\b|usisivač|usisivac/i,
+            dom: /kauč|kauc|sto\b|stolica|krevet|ormar|dušek|dusek|komoda|polica|sofa|fotelja|lampa|tepih|zavjese|posuđe|posude|kuhinja|bašta|basta|saksija|roštilj|rostilj|vrtn|namještaj|namjestaj|ogledalo/i,
+            odjeca: /jakna|majica|pantalone|farmerke|jeans|haljina|cipele|patike|čizme|cizme|kaput|džemper|dzemper|torba|ruksak|odjeća|odjeca|košulja|kosulja|sako|odijelo|ženski|muški/i,
+            bebe: /beba|bebe|dječ|djec|kolica|autosjedalica|igračk|igrack|lego|krevetac|pelene|školsk|skolsk/i,
+            alati: /bušilica|busilica|brusilica|alat|testera|šraf|sraf|kompresor|agregat|lestve|ljestve|zavarivač|varilica|bor mašina|motorna|kosilica|trimer/i,
+            sport: /bicikl|teg|tegovi|fitnes|fitness|traka za trčanje|lopta|reket|skije|ski\b|patike za|bućica|bucica|šator|sator|ribolov|štap|kajak|planinar|sport/i
+        };
+        function temaOglasa(o) {
+            const n = String(o.naziv || '');
+            for (const k of Object.keys(TEMA_RE)) if (TEMA_RE[k].test(n)) return k;
+            return 'ostalo';
+        }
 
         function toast(poruka, tip = 'ok') {
             const kon = document.getElementById('toast-kontejner');
@@ -1249,6 +1292,7 @@
                 if (kategorija === 'do20' && (String(o.cena).includes('Poklanjam') || parsirajCijenu(o.cena) >= 20)) return false;
                 if (kategorija === 'od20do50') { const c = parsirajCijenu(o.cena); if (c < 20 || c > 50) return false; }
                 if (kategorija === 'preko50' && parsirajCijenu(o.cena) <= 50) return false;
+                if (TEMA_RE[kategorija] && temaOglasa(o) !== kategorija) return false;
                 return true;
             });
             if (sortiranje === 'cijena-rast') rezultat.sort((a, b) => parsirajCijenu(a.cena) - parsirajCijenu(b.cena));
@@ -1848,6 +1892,9 @@
             // Originalni FB link (samo za tebe kao admina, da znaš o kom
             // proizvodu/objavi je riječ ako ti neko napiše poruku) —
             // običnim posjetiocima se ovo dugme NIKAD ne prikazuje.
+            postaviPoruciDugmad(o);
+            prikaziSlicne(o);
+
             let fbLink = document.getElementById('modal-fb-link');
             if (panelOtklucan && o.izvorni_link) {
                 fbLink.href = o.izvorni_link;
@@ -1865,6 +1912,54 @@
             pretplatiSeNaPoruke(id);
             document.getElementById('modal-oglas').classList.remove('hidden');
         }
+
+        function normalizujBroj(t) {
+            let d = String(t || '').replace(/[^\d+]/g, '');
+            if (d.startsWith('+')) return d.slice(1);
+            if (d.startsWith('00')) return d.slice(2);
+            if (d.startsWith('0')) return '382' + d.slice(1);
+            return d.length >= 11 ? d : '382' + d;
+        }
+        function postaviPoruciDugmad(o) {
+            const w = document.getElementById('modal-msg-wrapper');
+            const ima = o.telefon && !['Chat', 'Nije unijet', 'Chat podrška'].includes(o.telefon) && /\d{6,}/.test(o.telefon);
+            if (!ima) { w.classList.add('hidden'); return; }
+            const br = normalizujBroj(o.telefon);
+            const tekst = encodeURIComponent(`Zdravo, zanima me oglas "${o.naziv}" (${o.cena}) na Komšiluk.me — ${location.origin}${location.pathname}?oglas=${o.id}`);
+            document.getElementById('modal-wa-link').href = `https://wa.me/${br}?text=${tekst}`;
+            document.getElementById('modal-viber-link').href = `viber://chat?number=%2B${br}`;
+            w.classList.remove('hidden');
+        }
+        function prikaziSlicne(o) {
+            const wrap = document.getElementById('slicni-wrapper');
+            const lista = document.getElementById('slicni-lista');
+            const tema = temaOglasa(o);
+            const kandidati = Object.values(oglasiCache).filter(x => x.id !== o.id && x.odobreno && x.grad === o.grad)
+                .map(x => ({ x, bod: (temaOglasa(x) === tema && tema !== 'ostalo' ? 2 : 0) + (x.kvart === o.kvart ? 1 : 0) }))
+                .filter(r => r.bod > 0).sort((a, b) => b.bod - a.bod).slice(0, 6);
+            if (!kandidati.length) { wrap.classList.add('hidden'); return; }
+            lista.innerHTML = kandidati.map(({ x }) => `
+                <div onclick="otvoriOglas(${x.id})" class="flex-shrink-0 w-28 cursor-pointer bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <img src="${x.img || FALLBACK_SLIKA}" onerror="this.onerror=null;this.src='${FALLBACK_SLIKA}'" class="w-full h-20 object-cover" alt="">
+                    <div class="p-1.5"><p class="text-[10px] font-bold text-slate-800 truncate"></p><p class="text-[11px] font-extrabold text-brand-600">${String(x.cena).replace(/</g, '&lt;')}</p></div>
+                </div>`).join('');
+            [...lista.children].forEach((c, i) => { c.querySelector('p').textContent = kandidati[i].x.naziv; });
+            wrap.classList.remove('hidden');
+        }
+
+        // ===== Instalacija na početni ekran (PWA) =====
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+        let odgodjenaInstalacija = null;
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault(); odgodjenaInstalacija = e;
+            try { if (localStorage.getItem('kus_install_skriven')) return; } catch (_) {}
+            const b = document.createElement('div');
+            b.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-2xl shadow-xl flex items-center space-x-3';
+            b.innerHTML = '<span>📲 Dodaj Komšiluk na početni ekran</span><button id="pwa-da" class="bg-brand-500 px-3 py-1 rounded-lg">Dodaj</button><button id="pwa-ne" class="text-slate-400">✕</button>';
+            document.body.appendChild(b);
+            b.querySelector('#pwa-da').onclick = async () => { b.remove(); odgodjenaInstalacija.prompt(); };
+            b.querySelector('#pwa-ne').onclick = () => { b.remove(); try { localStorage.setItem('kus_install_skriven', '1'); } catch (_) {} };
+        });
 
         async function podijeliOglas() {
             const o = oglasiCache[trenutniOglasId];
