@@ -103,7 +103,7 @@
                     <button onclick="osvjeziPodatke()" title="Osvježi" class="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-brand-50 hover:text-brand-600 transition">
                         <i id="ikonica-refresh" class="fa-solid fa-rotate text-xs"></i>
                     </button>
-                    <button id="dugme-nalog" onclick="otvoriNalogModal()" title="Registruj se / Prijavi se" class="h-9 px-3 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs hover:bg-brand-50 hover:text-brand-600 transition">
+                    <button id="dugme-nalog" onclick="otvoriNalogModal()" title="Registruj se / Prijavi se" style="display:none" class="h-9 px-3 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs hover:bg-brand-50 hover:text-brand-600 transition">
                         <i class="fa-solid fa-user text-xs"></i>
                     </button>
                     <button onclick="proveriPristupPanelu()" class="w-9 h-9 rounded-xl bg-brand-500 text-white flex items-center justify-center font-extrabold text-xs shadow-md shadow-brand-500/20 hover:bg-brand-600 transition">
@@ -562,6 +562,7 @@
                         </div>
                     </div>
 
+                    <input type="text" id="input-ime-oglasa" placeholder="Vaše ime..." maxlength="40" class="w-full bg-emerald-50 border border-emerald-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-emerald-500 shadow-sm">
                     <input type="text" id="input-naziv-oglasa" placeholder="Naziv predmeta..." class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-brand-500 shadow-sm">
                     <input type="tel" id="input-telefon-oglasa" placeholder="Broj telefona (opciono)..." class="w-full bg-slate-50 border border-slate-200 px-3.5 py-3 rounded-xl text-xs text-slate-800 font-bold focus:outline-none focus:border-brand-500 shadow-sm">
 
@@ -825,6 +826,53 @@
             profilCache[userId] = info;
             return info;
         }
+
+        // ===== GOSTI: ime bez registracije + online status =====
+        const guestId = localStorage.getItem('kus_guest_id') || (() => { const id = crypto.randomUUID ? crypto.randomUUID() : 'g_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('kus_guest_id', id); return id; })();
+        let guestPresenceChannel = null;
+        let onlineGuestIds = new Set();
+        function guestInfoFromAd(o) {
+            const raw = typeof o?.izvorni_link === 'string' && o.izvorni_link.startsWith('guest:') ? o.izvorni_link.slice(6) : '';
+            if (!raw) return null;
+            const split = raw.indexOf(':');
+            if (split < 0) return null;
+            try { return { id: raw.slice(0, split), name: decodeURIComponent(raw.slice(split + 1)) }; } catch (_) { return null; }
+        }
+        async function osvjeziPrisustvoGosta(ime) {
+            localStorage.setItem('kus_moje_ime', ime);
+            if (guestPresenceChannel) { try { await guestPresenceChannel.track({ guest_id: guestId, name: ime }); } catch (_) {} }
+        }
+        function pokreniPrisustvoGosta() {
+            guestPresenceChannel = supabaseClient.channel('komsiluk-gosti-online', { config: { presence: { key: guestId } } });
+            guestPresenceChannel.on('presence', { event: 'sync' }, () => {
+                const state = guestPresenceChannel.presenceState();
+                onlineGuestIds = new Set(Object.values(state).flat().map(x => x.guest_id).filter(Boolean));
+                if (trenutniOglasId && oglasiCache[trenutniOglasId] && !document.getElementById('modal-oglas')?.classList.contains('hidden')) prikaziGostaUDetaljima(oglasiCache[trenutniOglasId]);
+                osvjeziZeleneTackice();
+            });
+            guestPresenceChannel.subscribe(async status => {
+                if (status === 'SUBSCRIBED') { const ime = localStorage.getItem('kus_moje_ime'); if (ime) await osvjeziPrisustvoGosta(ime); }
+            });
+        }
+        function prikaziGostaUDetaljima(o) {
+            const g = guestInfoFromAd(o); if (!g) return false;
+            document.getElementById('modal-prodavac-nadimak').innerText = g.name;
+            document.getElementById('modal-prodavac-poeni').className = 'text-[10px] ml-1';
+            document.getElementById('modal-prodavac-poeni').innerHTML = onlineGuestIds.has(g.id) ? '<span class="text-emerald-600 font-bold"><span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>online</span>' : '<span class="text-slate-400">offline</span>';
+            document.getElementById('modal-prodavac-red').classList.remove('hidden');
+            return true;
+        }
+        function tackicaOnline(o) {
+            const g = guestInfoFromAd(o); if (!g) return '';
+            const on = onlineGuestIds.has(g.id);
+            return `<span data-guest-id="${g.id}" title="${g.name} je online" class="${on ? '' : 'hidden'} inline-block w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-200 animate-pulse mr-1 align-middle"></span>`;
+        }
+        function osvjeziZeleneTackice() {
+            document.querySelectorAll('[data-guest-id]').forEach(el => {
+                el.classList.toggle('hidden', !onlineGuestIds.has(el.dataset.guestId));
+            });
+        }
+        pokreniPrisustvoGosta();
 
         // ===== NALOG (registracija/prijava) =====
         let trenutniNalog = null; // { id, email, nadimak } ili null ako nije ulogovan
@@ -1286,7 +1334,7 @@
                                 <div class="absolute top-2 right-2"><span class="${badgeBoja} font-extrabold shadow-sm">${o.cena}</span></div>
                             </div>
                             <div class="p-3 space-y-1">
-                                <h4 class="font-bold text-xs text-slate-900 line-clamp-1">${o.naziv}</h4>
+                                <h4 class="font-bold text-xs text-slate-900 line-clamp-1">${tackicaOnline(o)}${o.naziv}</h4>
                                 <p class="text-[10px] text-slate-500 font-medium truncate"><i class="fa-solid fa-location-dot text-brand-500 mr-0.5"></i> ${o.kvart} · ${vrijemeOdObjave(o.created_at)}</p>
                             </div>
                         </div>
@@ -1617,12 +1665,16 @@
         }
 
         async function objaviNoviOglas() {
-            if (!trenutniNalog) { toast('Prvo se prijavi.', 'err'); otvoriNalogModal(); return; }
+            // Bez registracije: dovoljno je samo ime. Ako je korisnik ipak prijavljen, koristi se nalog.
+            const imeObjavljivaca = document.getElementById('input-ime-oglasa').value.trim();
+            if (!imeObjavljivaca) { toast('Unesite svoje ime.', 'err'); document.getElementById('input-ime-oglasa').focus(); return; }
 
-            const { data: brojDanas, error: eBroj } = await supabaseClient.rpc('oglasa_danas', { korisnik_id: trenutniNalog.id });
-            if (!eBroj && brojDanas >= 5) {
-                toast('Dostigao/la si dnevni limit od 5 oglasa. Pokušaj sjutra.', 'err');
-                return;
+            if (trenutniNalog) {
+                const { data: brojDanas, error: eBroj } = await supabaseClient.rpc('oglasa_danas', { korisnik_id: trenutniNalog.id });
+                if (!eBroj && brojDanas >= 5) {
+                    toast('Dostigao/la si dnevni limit od 5 oglasa. Pokušaj sjutra.', 'err');
+                    return;
+                }
             }
 
             let naziv = document.getElementById('input-naziv-oglasa').value.trim();
@@ -1645,10 +1697,19 @@
                 grad: grad, kvart: kvart, dist_km: 0.1, naziv: naziv,
                 cena: jePoklanjam ? 'Poklanjam 🎁' : cena,
                 telefon: telefon || 'Chat', img: slikaUrl, odobreno: true,
-                user_id: trenutniNalog.id
+                user_id: trenutniNalog ? trenutniNalog.id : null,
+                izvorni_link: trenutniNalog ? null : `guest:${guestId}:${encodeURIComponent(imeObjavljivaca)}`
             });
 
-            if (!rezultat.ok) { toast('Greška: ' + rezultat.msg, 'err'); return; }
+            if (!rezultat.ok) {
+                const m = String(rezultat.msg || '');
+                if (/row-level security|policy|permission denied/i.test(m)) toast('Objava je blokirana u bazi. Pokreni gosti-objava.sql u Supabase SQL Editoru.', 'err');
+                else toast(m.includes('limit') || m.includes('mnogo') ? m : 'Greška: ' + m, 'err');
+                return;
+            }
+            localStorage.setItem('kus_moje_ime', imeObjavljivaca);
+
+            await osvjeziPrisustvoGosta(imeObjavljivaca); // pamti ime i javlja da je korisnik online
 
             zatvoriObjavu();
             document.getElementById('select-grad').value = grad;
@@ -1757,7 +1818,8 @@
 
             const prodavacRed = document.getElementById('modal-prodavac-red');
             prodavacRed.classList.add('hidden');
-            if (o.user_id) {
+            if (prikaziGostaUDetaljima(o)) { /* guest seller */ }
+            else if (o.user_id) {
                 dajProfilInfo(o.user_id).then(info => {
                     if (!info || trenutniOglasId !== id) return;
                     document.getElementById('modal-prodavac-nadimak').innerText = info.nadimak;
@@ -1921,11 +1983,7 @@
         }
 
         function otvoriObjavu() {
-            if (!trenutniNalog) {
-                toast('Prvo se registruj ili prijavi da bi postavio/la oglas.', 'err');
-                otvoriNalogModal();
-                return;
-            }
+            document.getElementById('input-ime-oglasa').value = localStorage.getItem('kus_moje_ime') || (trenutniNalog ? trenutniNalog.nadimak : '');
             document.getElementById('input-naziv-oglasa').value = '';
             document.getElementById('input-cena-oglasa').value = '';
             document.getElementById('input-telefon-oglasa').value = '';

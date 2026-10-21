@@ -43,3 +43,7 @@ Za Vercel Cron obavezno podesiti tajnu `CRON_SECRET` u production okruženju; Ve
 ## Dnevni Temu panel
 
 Admin panel sada ima tri polja za dnevne Temu linkove. Nakon prijave, klik na **Sačuvaj paket** preuzima osnovni naziv i sliku proizvoda i čuva tri aktivna proizvoda u `temu_products`; klik na **Pregled objave** provjerava tri najnovija odobrena lokalna oglasa i prvi Temu proizvod. Ručna Meta objava koristi prijavljenu Supabase sesiju; automatski Vercel Cron koristi `CRON_SECRET`.
+
+## Objava bez registracije (gosti)
+
+U Supabase SQL Editoru jednom pokreni `gosti-objava.sql`. Dodaje pravila da gosti mogu objavljivati oglase, slike, Zajednicu i poruke, plus limit od 5 oglasa dnevno po uređaju.
