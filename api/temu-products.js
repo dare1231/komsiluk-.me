@@ -27,7 +27,8 @@ async function authenticatedUser(req) {
     headers: { apikey: ANON_KEY, Authorization: auth },
   });
   if (!response.ok) return null;
-  return response.json();
+  const user = await response.json();
+  return String(user?.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '7ageman49@gmail.com').toLowerCase() ? user : null;
 }
 
 function htmlMeta(html, property) {
