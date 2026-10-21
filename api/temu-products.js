@@ -28,7 +28,7 @@ async function authenticatedUser(req) {
   });
   if (!response.ok) return null;
   const user = await response.json();
-  return String(user?.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '7ageman49@gmail.com').toLowerCase() ? user : null;
+  return String(user?.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '71ageman49@gmail.com').toLowerCase() ? user : null;
 }
 
 function htmlMeta(html, property) {

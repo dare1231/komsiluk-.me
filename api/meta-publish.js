@@ -19,7 +19,7 @@ async function isSupabaseUserToken(token) {
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } });
   if (!response.ok) return false;
   const user = await response.json();
-  return String(user?.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '7ageman49@gmail.com').toLowerCase();
+  return String(user?.email || '').toLowerCase() === (process.env.ADMIN_EMAIL || '71ageman49@gmail.com').toLowerCase();
 }
 async function getPageToken() {
   if (resolvedPageToken) return resolvedPageToken;
