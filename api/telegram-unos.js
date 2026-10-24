@@ -12,6 +12,7 @@
 // Jednokratno povezivanje: otvori u pregledaču  /api/telegram-unos?setup=1
 
 const crypto = require('crypto');
+const sharp = require('sharp');
 
 const GRADOVI = {"Podgorica": ["Blok 5", "Blok 6", "Blok 9", "Tološi", "City Kvart", "Centar", "Zabjelo", "Preko Morače", "Stara Varoš", "Momišići", "Gornja Gorica", "Zlatica", "Konik", "Dabovići", "Donja Gorica"], "Nikšić": ["Kličevo", "Stara Varoš", "Rubeža", "Centar", "Bistrica", "Rastoci", "Željezara", "Dragova Luka", "Kočani", "Straševina", "Vidovanjski", "Grebice"], "Bar": ["Topolica", "Bjeliši", "Šušanj", "Biskupada", "Centar", "Polje", "Rutke", "Zeleni Pojas", "Ilino", "Rena", "Burtaši", "Sutomorska obala"], "Budva": ["Centar", "Rozino", "Dubovica", "Bečići", "Petrovac", "Rafailovići", "Jaz", "Babin Do", "Prijevor", "Sveti Stefan", "Pržno"], "Kotor": ["Stari Grad", "Dobrota", "Škaljari", "Prčanj", "Perast", "Risan", "Muo", "Kavč", "Ljuta", "Stoliv"], "Herceg Novi": ["Stari Grad", "Igalo", "Topla", "Savina", "Meljine", "Zelenika", "Baošići", "Đenovići", "Kamenari", "Sutorina"], "Tivat": ["Centar", "Kalimanj", "Donja Lastva", "Gornja Lastva", "Seljanovo", "Mazina", "Mrčevac", "Lepetani", "Radovići"], "Ulcinj": ["Stari Grad", "Pinješ", "Metering", "Bjelisi", "Dobre Vode", "Donji Štoj", "Gornji Štoj", "Velika Plaža", "Krue", "Kod Zgrade"], "Cetinje": ["Stari Grad", "Donje Polje", "Bogorodičina", "Vlaška Crkva", "Gornje Polje", "Cetinjsko Polje", "Bajice"], "Bijelo Polje": ["Nikoljac", "Centar", "Pruška", "Loznice", "Nedakusi", "Rasovo", "Lipnica", "Ribarevine"], "Berane": ["Centar", "Livadice", "Donji Talum", "Rudeš", "Dolac", "Hareme", "Buče", "Pešca"], "Pljevlja": ["Centar", "Gagovića Imanje", "Moćevac", "Guka", "Varoš", "Ševari", "Zlatiborci", "Židovići"], "Rožaje": ["Centar", "Bandžovo Brdo", "Bujici", "Kaludra", "Besnik", "Grahovača"], "Kolašin": ["Centar", "Breza", "Bjelasica", "Selišta", "Bare", "Mateševo"], "Žabljak": ["Centar", "Bosača", "Njegovići", "Tepca", "Motički Gaj"], "Mojkovac": ["Centar", "Uloševina", "Podbišće", "Ambar", "Bojišta"], "Plav": ["Centar", "Hajdaroviće", "Prnjavor", "Meteor", "Brezujevići"], "Andrijevica": ["Centar", "Prisoja", "Kralje", "Trešnjevik"], "Danilovgrad": ["Centar", "Grlić", "Slap", "Landža", "Spuž", "Jelenak"], "Tuzi": ["Centar", "Vranj", "Kušanje", "Milješ", "Sukuruć", "Dinoša"], "Gusinje": ["Centar", "Vusanje", "Ali Pašini Izvori", "Martinovići"], "Petnjica": ["Centar", "Krnja Jela", "Vrbica", "Lozna", "Trpezi"], "Šavnik": ["Centar", "Komore", "Bukovica", "Petnjica"], "Plužine": ["Centar", "Goransko", "Brezorna", "Trsa", "Stabna"]};
 const NEUTRAL = '/assets/neutral-product.svg';
@@ -117,21 +118,21 @@ ${text.slice(0, 3000)}` }]
   } catch { return null; }
 }
 
-async function izvuci(text) {
+async function izvuci(text, gotovAi) {
   const lok = nadjiGrad(text), tel = nadjiTelefon(text), cij = nadjiCijenu(text);
   const out = {
     naziv: osnovniNaziv(text, [tel && tel.tekst, cij && cij.tekst], lok && lok.grad, lok && lok.kvart),
     grad: lok && lok.grad, kvart: lok ? lok.kvart : 'Centar',
     cena: cij ? cij.cena : 'Po dogovoru', telefon: tel ? tel.broj : 'Chat'
   };
-  const ai = await aiIzvuci(text);
+  const ai = gotovAi || await aiIzvuci(text);
   if (ai) {
     if (ai.naziv && String(ai.naziv).trim().length >= 3) out.naziv = String(ai.naziv).trim().replace(/^["'„“]+|["'“”]+$/g, '').slice(0, 80);
     // grad i telefon prihvatamo od AI samo ako postoje u tekstu (da ne izmisli)
-    if (!out.grad && ai.grad && GRADOVI[ai.grad] && gradRegex(ai.grad).test(fold(text))) out.grad = ai.grad;
+    if (!out.grad && ai.grad && GRADOVI[ai.grad] && (gotovAi || gradRegex(ai.grad).test(fold(text)))) out.grad = ai.grad;
     if (out.grad && ai.kvart && (GRADOVI[out.grad] || []).some(k => fold(k) === fold(ai.kvart))) out.kvart = GRADOVI[out.grad].find(k => fold(k) === fold(ai.kvart));
     if (!cij && ai.cena && /\d|dogovor|besplatno/i.test(ai.cena)) out.cena = String(ai.cena).replace(/\s*(eur|eura|evra|e)\.?$/i, '€').slice(0, 20);
-    if (!tel && ai.telefon) { const t2 = nadjiTelefon(String(ai.telefon)); if (t2 && text.replace(/\D/g, '').includes(t2.broj.replace(/\D/g, '').slice(1))) out.telefon = t2.broj; }
+    if (!tel && ai.telefon) { const t2 = nadjiTelefon(String(ai.telefon)); if (t2 && (gotovAi || text.replace(/\D/g, '').includes(t2.broj.replace(/\D/g, '').slice(1)))) out.telefon = t2.broj; }
   }
   return out;
 }
@@ -153,27 +154,99 @@ async function javiMeta(host, id) {
 }
 
 // ---------- slika ----------
-async function sacuvajSliku(photos) {
+async function preuzmi(photos) {
   const best = photos.slice().sort((a, b) => (b.file_size || b.width * b.height) - (a.file_size || a.width * a.height))[0];
   const file = await tg('getFile', { file_id: best.file_id });
   const r = await fetch(`https://api.telegram.org/file/bot${tgToken()}/${file.file_path}`);
   if (!r.ok) throw new Error('Ne mogu preuzeti sliku sa Telegrama.');
-  const buf = Buffer.from(await r.arrayBuffer());
-  const path = `telegram/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.jpg`;
-  await sb(`/storage/v1/object/${BUCKET}/${path}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false', 'cache-control': '3600' }, body: buf });
+  return Buffer.from(await r.arrayBuffer());
+}
+async function upload(buf, path, upsert = false) {
+  await sb(`/storage/v1/object/${BUCKET}/${path}`, { method: upsert ? 'PUT' : 'POST', headers: { 'Content-Type': 'image/jpeg', 'x-upsert': upsert ? 'true' : 'false', 'cache-control': '3600' }, body: buf });
   return `${process.env.SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+}
+const novaPutanja = () => `telegram/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.jpg`;
+
+// Slika koja čeka tekst (poslao sliku bez opisa) — čuva se 30 minuta
+const pendPath = chat => `telegram/pending/${String(chat).replace(/\D/g, '')}`;
+async function sacuvajPending(chat, buf, group) {
+  await upload(buf, pendPath(chat) + '.jpg', true);
+  const meta = Buffer.from(JSON.stringify({ at: Date.now(), group: group || null }));
+  await sb(`/storage/v1/object/${BUCKET}/${pendPath(chat)}.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-upsert': 'true' }, body: meta });
+}
+async function citajPending(chat) {
+  try {
+    const r = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/${BUCKET}/${pendPath(chat)}.json?t=${Date.now()}`, { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } });
+    if (!r.ok) return null;
+    const m = await r.json();
+    return m && Date.now() - m.at < 30 * 60000 ? m : null;
+  } catch { return null; }
+}
+async function uzmiPending(chat) {
+  const m = await citajPending(chat);
+  if (!m) return null;
+  const r = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/${BUCKET}/${pendPath(chat)}.jpg`, { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } });
+  if (!r.ok) return null;
+  const buf = Buffer.from(await r.arrayBuffer());
+  await sb(`/storage/v1/object/${BUCKET}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [pendPath(chat) + '.json', pendPath(chat) + '.jpg'] }) }).catch(() => {});
+  return buf;
+}
+
+// AI pogleda sliku: je li screenshot oglasa (pročita tekst i nađe fotografiju proizvoda) ili samo slika proizvoda
+async function aiSlika(buf) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+  try {
+    const small = await sharp(buf).rotate().resize({ width: 800, height: 1200, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5', max_tokens: 300,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: small.toString('base64') } },
+          { type: 'text', text: `Ovo je slika poslata za mali oglas u Crnoj Gori. Vrati SAMO JSON:
+{"vrsta": "screenshot" ako je snimak ekrana sa tekstom oglasa (poruka, objava, sajt), "proizvod" ako je samo fotografija predmeta,
+ "tekst": "sav tekst oglasa koji vidiš na slici, prepisan tačno" ili "",
+ "naziv": "kratak naslov proizvoda na crnogorskom, 2-7 riječi" ili null,
+ "cena": "npr. 35€, Po dogovoru, Besplatno" ili null,
+ "grad": "jedan od: ${Object.keys(GRADOVI).join(', ')}" ili null,
+ "kvart": "naselje ako piše" ili null,
+ "telefon": "broj telefona ako piše" ili null,
+ "foto": [x, y, sirina, visina] u procentima (0-100) — pravougaonik fotografije PROIZVODA unutar screenshota, ili null ako je cijela slika proizvod ili fotografije nema}
+Ne izmišljaj — piši samo ono što se vidi na slici.` }
+        ] }]
+      })
+    });
+    const j = await r.json();
+    const t = j && j.content && j.content[0] && j.content[0].text || '';
+    const m = t.match(/\{[\s\S]*\}/);
+    return m ? JSON.parse(m[0]) : null;
+  } catch { return null; }
+}
+
+// Izreže fotografiju proizvoda iz screenshota; ako okvir nije razuman, vraća null
+async function izrezi(buf, box) {
+  try {
+    if (!Array.isArray(box) || box.length !== 4) return null;
+    const img = sharp(buf).rotate();
+    const { width, height } = await img.metadata();
+    let [x, y, w, h] = box.map(Number);
+    if ([x, y, w, h].some(n => !isFinite(n)) || w < 15 || h < 10) return null;
+    const left = Math.max(0, Math.round(width * x / 100)), top = Math.max(0, Math.round(height * y / 100));
+    const cw = Math.min(width - left, Math.round(width * w / 100)), ch = Math.min(height - top, Math.round(height * h / 100));
+    if (cw < 120 || ch < 120) return null;
+    return await sharp(buf).rotate().extract({ left, top, width: cw, height: ch }).jpeg({ quality: 86 }).toBuffer();
+  } catch { return null; }
 }
 
 const POMOC = [
-  '👋 <b>Komšiluk unos</b>',
+  '👋 <b>Komšiluk unos</b>, bez kucanja:',
   '',
-  'Pošalji mi <b>sliku</b> i ispod nje zalijepi oglas kakav god da je (može i prepisan, proslijeđen), npr:',
-  '<i>Bicikl za dijete, 80€, Budva, 067 123 456</i>',
+  '📸 <b>Screenshot oglasa</b> — samo pošalji, ja pročitam sve sa slike.',
+  '↪️ <b>Proslijedi</b> oglas iz bilo kog chata ili grupe.',
+  '🖼 <b>Slika pa tekst</b> — pošalji slike, pa tekst ili screenshot teksta, ja ih spojim.',
   '',
-  'Ja izvučem naziv, cijenu, grad i telefon i objavim oglas na Komšiluk.me.',
-  'Bez cijene piše „Po dogovoru“, bez telefona kupci pišu preko četa.',
-  'Grad je obavezan.',
-  '',
+  'Bez cijene piše „Po dogovoru“, bez telefona kupci pišu preko četa. Grad je obavezan.',
   'Na svaka 3 nova oglasa (od bilo koga) ide objava na Instagram i Facebook: 3 oglasa + 1 Temu.',
   'Pogrešan oglas obrišeš komandom koju ti pošaljem uz potvrdu.'
 ].join('\n');
@@ -196,17 +269,48 @@ async function obradi(msg, host) {
     return reply(chat, rows && rows.length ? `🗑 Obrisan oglas: ${esc(rows[0].naziv)}` : 'Taj oglas nije nađen (ili nije objavljen preko bota).');
   }
 
-  if (!text) return reply(chat, msg.photo ? '📝 Fali tekst. Pošalji sliku ponovo i ispod nje napiši oglas (naziv, cijena, grad, telefon).' : POMOC);
+  let o = null, slika = null, iz = '';
 
-  const dup = await sb(`/rest/v1/oglasi?select=id&izvorni_link=eq.telegram:${msg.message_id}&limit=1`).catch(() => []);
-  if (dup && dup.length) return;   // Telegram ponovio istu poruku — oglas već postoji
+  if (msg.photo && !text) {
+    // Slika bez teksta: dio albuma, screenshot oglasa ili samo fotografija predmeta
+    const buf = await preuzmi(msg.photo);
+    if (msg.media_group_id) {
+      const prev = await citajPending(chat);
+      if (!prev || prev.group !== msg.media_group_id) {
+        await sacuvajPending(chat, buf, msg.media_group_id);
+        return reply(chat, '🖼 Imam slike. Sad pošalji tekst oglasa ili screenshot teksta.');
+      }
+      return;   // ostale slike iz istog albuma ne trebaju
+    }
+    await tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => {});
+    const v = await aiSlika(buf);
+    if (v && v.vrsta === 'screenshot' && (v.tekst || v.naziv)) {
+      // Screenshot: podatke čitamo sa slike, fotografiju proizvoda izrežemo (ili čeka ako je ima posebno)
+      o = await izvuci(String(v.tekst || ''), v);
+      slika = (await izrezi(buf, v.foto)) || (await uzmiPending(chat));
+      iz = 'screenshot';
+    } else {
+      await sacuvajPending(chat, buf);
+      return reply(chat, '🖼 Imam sliku. Sad pošalji tekst oglasa (proslijedi ga, zalijepi ili pošalji screenshot teksta).');
+    }
+  } else if (!text) {
+    return reply(chat, POMOC);
+  } else {
+    o = await izvuci(text);
+    slika = msg.photo && msg.photo.length ? await preuzmi(msg.photo) : await uzmiPending(chat);
+  }
 
-  const o = await izvuci(text);
-  if (!o.grad) return reply(chat, '📍 Ne vidim grad. Pošalji ponovo i dodaj grad, npr. „Budva“ ili „Podgorica“.');
-  if (!o.naziv || o.naziv.length < 3) return reply(chat, '🏷 Ne vidim šta se prodaje. Pošalji ponovo sa nazivom na početku, npr. „Bicikl za dijete, 80€, Budva“.');
+  if (!o.grad) {
+    if (slika && !msg.photo) await sacuvajPending(chat, slika);
+    return reply(chat, '📍 Ne vidim grad. Pošalji tekst ponovo i dodaj grad (npr. „Budva“). Slika čeka.');
+  }
+  if (!o.naziv || o.naziv.length < 3) {
+    if (slika && !msg.photo) await sacuvajPending(chat, slika);
+    return reply(chat, '🏷 Ne vidim šta se prodaje. Pošalji tekst ponovo sa nazivom na početku. Slika čeka.');
+  }
 
-  await tg('sendChatAction', { chat_id: chat, action: msg.photo ? 'upload_photo' : 'typing' }).catch(() => {});
-  const img = msg.photo && msg.photo.length ? await sacuvajSliku(msg.photo) : NEUTRAL;
+  await tg('sendChatAction', { chat_id: chat, action: 'upload_photo' }).catch(() => {});
+  const img = slika ? await upload(await sharp(slika).rotate().resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 84 }).toBuffer(), novaPutanja()) : NEUTRAL;
 
   const red = {
     grad: o.grad, kvart: o.kvart, dist_km: 0.2, naziv: o.naziv, cena: o.cena, telefon: o.telefon, img,
@@ -223,7 +327,7 @@ async function obradi(msg, host) {
     `💶 ${esc(o.cena)}`,
     `📍 ${esc(o.grad)}${o.kvart && o.kvart !== 'Centar' ? ', ' + esc(o.kvart) : ''}`,
     `📞 ${esc(o.telefon === 'Chat' ? 'preko četa' : o.telefon)}`,
-    msg.photo ? '' : '🖼 bez slike (stavljena neutralna)',
+    img === NEUTRAL ? '🖼 bez slike (stavljena neutralna)' : iz === 'screenshot' ? '🔎 pročitano sa screenshota' : '',
     '',
     id ? `🔗 ${site()}/?oglas=${id}` : '',
     id ? `Pogrešno? Pošalji /obrisi_${id}` : ''
