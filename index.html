@@ -1543,8 +1543,13 @@
         }
 
         async function objaviMetaAutomatski(newAdIds = [], notify = false) {
+            if (!newAdIds.length) return;
             const headers = await authHeaders();
-            if (!headers || !newAdIds.length) return;
+            if (!headers) {
+                // posjetilac: server sam provjeri da li su se skupila 3 nova oglasa
+                fetch('/api/meta-publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ping: true }) }).catch(() => {});
+                return;
+            }
             try {
                 let response = await fetch('/api/meta-publish', { method: 'POST', headers, body: JSON.stringify({ new_ad_ids: newAdIds }) });
                 if (response.status === 401) {

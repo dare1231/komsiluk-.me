@@ -164,10 +164,14 @@ module.exports = async (req, res) => {
   const bySecret = Boolean(PUBLISH_TOKEN && authorization === `Bearer ${PUBLISH_TOKEN}`);
   const byCron = Boolean(CRON_SECRET && authorization === `Bearer ${CRON_SECRET}`);
   const byLoggedInAdmin = !bySecret && !byCron && await isSupabaseUserToken(bearer);
-  if (!bySecret && !byCron && !byLoggedInAdmin) return res.status(401).json({ error: 'Neautorizovan publish.' });
+  let rawBody = {};
+  try { rawBody = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); } catch {}
+  // Ping (posjetilac postavio oglas): bez prijave, ali samo pokreće automatski red od 3 nova oglasa + 1 Temu.
+  const byPing = !bySecret && !byCron && !byLoggedInAdmin && req.method === 'POST' && rawBody.ping === true;
+  if (!bySecret && !byCron && !byLoggedInAdmin && !byPing) return res.status(401).json({ error: 'Neautorizovan publish.' });
   if (!PAGE_ID || !PAGE_ACCESS_TOKEN || !PUBLIC_SITE_URL) return res.status(500).json({ error: 'Meta i PUBLIC_SITE_URL varijable nijesu podešene.' });
   try {
-    const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const payload = byPing ? {} : rawBody;
     const manual = payload.manual === true;
     if (process.env.AUTO_SOCIAL_PUBLISH === 'false' && !manual) return res.status(200).json({ ok: true, skipped: true, message: 'Automatska objava je isključena.' });
     let runs = [];

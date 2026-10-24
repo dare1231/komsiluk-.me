@@ -14,6 +14,9 @@
     "api/meta-publish.js": {
       "includeFiles": "api/fonts/**",
       "maxDuration": 60
+    },
+    "api/telegram-unos.js": {
+      "maxDuration": 60
     }
   }
 }
