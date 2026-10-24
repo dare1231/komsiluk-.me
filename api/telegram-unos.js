@@ -21,7 +21,7 @@ const BUCKET = 'oglasi-slike';
 const tgToken = () => String(process.env.TELEGRAM_UNOS_TOKEN || '').trim();
 const secret = () => crypto.createHash('sha256').update('komsiluk-unos:' + tgToken()).digest('hex').slice(0, 48);
 const admins = () => String(process.env.TELEGRAM_UNOS_ADMINS || '').split(/[\s,;]+/).filter(Boolean);
-const site = () => String(process.env.PUBLIC_SITE_URL || 'https://komsiluk.me').replace(/\/+$/, '');
+const site = host => String(process.env.PUBLIC_SITE_URL || (host ? `https://${host}` : 'https://komsiluk.me')).replace(/\/+$/, '');
 const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'dj');
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
