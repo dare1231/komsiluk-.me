@@ -169,9 +169,10 @@ const novaPutanja = () => `telegram/${Date.now()}-${crypto.randomBytes(4).toStri
 
 // Slika koja čeka tekst (poslao sliku bez opisa) — čuva se 30 minuta
 const pendPath = chat => `telegram/pending/${String(chat).replace(/\D/g, '')}`;
-async function sacuvajPending(chat, buf, group) {
-  await upload(buf, pendPath(chat) + '.jpg', true);
-  const meta = Buffer.from(JSON.stringify({ at: Date.now(), group: group || null }));
+async function sacuvajPending(chat, buf, group, tekst) {
+  if (buf) await upload(buf, pendPath(chat) + '.jpg', true);
+  const prev = buf ? null : await citajPending(chat);
+  const meta = Buffer.from(JSON.stringify({ at: Date.now(), group: group || null, tekst: tekst || '', slika: Boolean(buf) || Boolean(prev && prev.slika) }));
   await sb(`/storage/v1/object/${BUCKET}/${pendPath(chat)}.json`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-upsert': 'true' }, body: meta });
 }
 async function citajPending(chat) {
@@ -182,13 +183,17 @@ async function citajPending(chat) {
     return m && Date.now() - m.at < 30 * 60000 ? m : null;
   } catch { return null; }
 }
+async function slikaPending(chat, m) {
+  if (!m || m.slika === false) return null;
+  const r = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/${BUCKET}/${pendPath(chat)}.jpg?t=${Date.now()}`, { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } });
+  return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+}
+async function obrisiPending(chat) {
+  await sb(`/storage/v1/object/${BUCKET}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [pendPath(chat) + '.json', pendPath(chat) + '.jpg'] }) }).catch(() => {});
+}
 async function uzmiPending(chat) {
   const m = await citajPending(chat);
-  if (!m) return null;
-  const r = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/${BUCKET}/${pendPath(chat)}.jpg`, { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } });
-  if (!r.ok) return null;
-  const buf = Buffer.from(await r.arrayBuffer());
-  await sb(`/storage/v1/object/${BUCKET}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [pendPath(chat) + '.json', pendPath(chat) + '.jpg'] }) }).catch(() => {});
+  const buf = await slikaPending(chat, m);
   return buf;
 }
 
@@ -263,13 +268,15 @@ async function obradi(msg, host) {
 
   if (/^\/(start|pomoc|help)\b/i.test(text)) return reply(chat, POMOC);
 
+  if (/^\/ponisti\b/i.test(text)) { await obrisiPending(chat); return reply(chat, '🧹 Poništeno. Pošalji novi oglas.'); }
+
   const del = text.match(/^\/obrisi_(\d+)\b/i);
   if (del) {
     const rows = await sb(`/rest/v1/oglasi?id=eq.${del[1]}&izvorni_link=like.telegram:*`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
     return reply(chat, rows && rows.length ? `🗑 Obrisan oglas: ${esc(rows[0].naziv)}` : 'Taj oglas nije nađen (ili nije objavljen preko bota).');
   }
 
-  let o = null, slika = null, iz = '';
+  let o = null, slika = null, iz = '', sviTekst = '';
 
   if (msg.photo && !text) {
     // Slika bez teksta: dio albuma, screenshot oglasa ili samo fotografija predmeta
@@ -286,28 +293,43 @@ async function obradi(msg, host) {
     const v = await aiSlika(buf);
     if (v && v.vrsta === 'screenshot' && (v.tekst || v.naziv)) {
       // Screenshot: podatke čitamo sa slike, fotografiju proizvoda izrežemo (ili čeka ako je ima posebno)
-      o = await izvuci(String(v.tekst || ''), v);
+      sviTekst = String(v.tekst || '');
+      o = await izvuci(sviTekst, v);
       slika = (await izrezi(buf, v.foto)) || (await uzmiPending(chat));
       iz = 'screenshot';
     } else {
+      const prev = await citajPending(chat);
+      if (prev && prev.tekst) {
+        sviTekst = prev.tekst; o = await izvuci(sviTekst); slika = buf;
+        if (o.grad && o.naziv && o.naziv.length >= 3) { await obrisiPending(chat); }
+        else { await sacuvajPending(chat, buf, null, sviTekst); return reply(chat, '🖼 Imam sliku i tekst, ali fali grad ili naziv — napiši ga.'); }
+      } else {
       await sacuvajPending(chat, buf);
       return reply(chat, '🖼 Imam sliku. Sad pošalji tekst oglasa (proslijedi ga, zalijepi ili pošalji screenshot teksta).');
+      }
     }
   } else if (!text) {
     return reply(chat, POMOC);
   } else {
-    o = await izvuci(text);
-    slika = msg.photo && msg.photo.length ? await preuzmi(msg.photo) : await uzmiPending(chat);
+    // nastavak započetog oglasa: spajamo novi tekst sa onim što je već poslato
+    const prev = await citajPending(chat);
+    sviTekst = [prev && prev.tekst, text].filter(Boolean).join('\n');
+    o = await izvuci(sviTekst);
+    slika = msg.photo && msg.photo.length ? await preuzmi(msg.photo) : await slikaPending(chat, prev);
   }
 
-  if (!o.grad) {
-    if (slika && !msg.photo) await sacuvajPending(chat, slika);
-    return reply(chat, '📍 Ne vidim grad. Pošalji tekst ponovo i dodaj grad (npr. „Budva“). Slika čeka.');
+  const fali = !o.grad ? 'grad' : (!o.naziv || o.naziv.length < 3) ? 'naziv' : '';
+  if (fali) {
+    await sacuvajPending(chat, msg.photo ? slika : null, null, sviTekst);
+    const imam = [o.naziv && o.naziv.length >= 3 && `🏷 ${esc(o.naziv)}`, o.cena && `💶 ${esc(o.cena)}`, o.grad && `📍 ${esc(o.grad)}`, o.telefon !== 'Chat' && `📞 ${esc(o.telefon)}`].filter(Boolean);
+    return reply(chat, [
+      fali === 'grad' ? '📍 Fali još <b>grad</b> — napiši samo grad, npr. <i>Podgorica</i>.' : '🏷 Fali još <b>šta se prodaje</b> — napiši samo naziv, npr. <i>Dječiji trotinet</i>.',
+      imam.length ? '\nDo sad imam:\n' + imam.join('\n') : '',
+      slika ? '🖼 Slika čeka.' : '',
+      '\n/ponisti — počni ispočetka'
+    ].filter(Boolean).join('\n'));
   }
-  if (!o.naziv || o.naziv.length < 3) {
-    if (slika && !msg.photo) await sacuvajPending(chat, slika);
-    return reply(chat, '🏷 Ne vidim šta se prodaje. Pošalji tekst ponovo sa nazivom na početku. Slika čeka.');
-  }
+  await obrisiPending(chat);
 
   await tg('sendChatAction', { chat_id: chat, action: 'upload_photo' }).catch(() => {});
   const img = slika ? await upload(await sharp(slika).rotate().resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 84 }).toBuffer(), novaPutanja()) : NEUTRAL;
@@ -329,7 +351,7 @@ async function obradi(msg, host) {
     `📞 ${esc(o.telefon === 'Chat' ? 'preko četa' : o.telefon)}`,
     img === NEUTRAL ? '🖼 bez slike (stavljena neutralna)' : iz === 'screenshot' ? '🔎 pročitano sa screenshota' : '',
     '',
-    id ? `🔗 ${site()}/?oglas=${id}` : '',
+    id ? `🔗 ${site(host)}/?oglas=${id}` : '',
     id ? `Pogrešno? Pošalji /obrisi_${id}` : ''
   ].filter((x, i, a) => x !== '' || (a[i - 1] !== '' && i < a.length - 1)).join('\n'));
   // Instagram red ide poslije potvrde, da ne čekaš na kolaž
